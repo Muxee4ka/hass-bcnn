@@ -1,0 +1,120 @@
+{
+  "title": "Center SBK",
+  "config": {
+    "abort": {
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error",
+      "no_devices": "No devices found in account"
+    },
+    "step": {
+      "user": {
+        "title": "Fill in your Center SBK account information",
+        "data": {
+          "account": "Account number"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "account": {
+        "name": "Account"
+      },
+      "cost": {
+        "name": "Amount to be paid"
+      },
+      "cost_date": {
+        "name": "Account Date"
+      },
+      "balance": {
+        "name": "Balance"
+      },
+      "meter": {
+        "name": "Meter"
+      },
+      "readings_date": {
+        "name": "Readings date"
+      },
+      "current_timestamp": {
+        "name": "Last update"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      },
+      "get_bill": {
+        "name": "Get bill"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Update Information.",
+      "description": "Update personal account information of Center SBK",
+      "fields": {
+        "device_id": {
+          "name": "Account",
+          "description": "Select the account of Center SBK"
+        }
+      }
+    },
+    "get_bill": {
+      "name": "Get the bill.",
+      "description": "Receive an invoice from Center SBK",
+      "fields": {
+        "device_id": {
+          "name": "Account",
+          "description": "Select the account of Center SBK"
+        }
+      }
+    },
+    "send_readings": {
+      "name": "Send Readings",
+      "description": "Send readings to the SBK Center",
+      "fields": {
+        "device_id": {
+          "name": "Account Number",
+          "description": "Select the SBK Center account number"
+        },
+        "cw1": {
+          "name": "Cold Water Meter #1",
+          "description": "Cold Water Meter #1"
+        },
+        "cw1val": {
+          "name": "Cold Water Meter #1 Readings, m³",
+          "description": "Cold Water Meter #1 Readings, m³"
+        },
+        "cw2": {
+          "name": "Cold Water Meter #2",
+          "description": "Cold Water Meter #2"
+        },
+        "cw2val": {
+          "name": "Cold Water Meter #2 Readings, m³",
+          "description": "Cold Water Meter #2 Readings, m³"
+        },
+        "hw1": {
+          "name": "Hot Water Meter #1",
+          "description": "Hot Water Meter #1"
+        },
+        "hw1val": {
+          "name": "Hot Water Meter #1 Readings, m³",
+          "description": "Hot Water Meter #1 Readings, m³"
+        },
+        "hw2": {
+          "name": "Hot Water Meter #2",
+          "description": "Hot Water Meter #2"
+        },
+        "hw2val": {
+          "name": "Hot Water Meter #2 Readings, m³",
+          "description": "Hot Water Meter #2 Readings, m³"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+refresh:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: bcnn
+get_bill:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: bcnn
+
+send_readings:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: bcnn
+    cw1:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    cw1val:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    hw1:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    hw1val:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    cw2:
+      required: false
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    cw2val:
+      required: false
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    hw2:
+      required: false
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water
+    hw2val:
+      required: false
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: water

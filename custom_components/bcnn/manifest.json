@@ -1,0 +1,15 @@
+{
+    "domain": "bcnn",
+    "name": "Center-SBK",
+    "codeowners": ["@muxee4ka"],
+    "config_flow": true,
+    "dependencies": [],
+    "documentation": "https://github.com/Muxee4ka/hass-bcnn",
+    "homekit": {},
+    "iot_class": "cloud_polling",
+    "issue_tracker": "https://github.com/Muxee4ka/hass-bcnn/issues",
+    "requirements": ["transliterate", "beautifulsoup4"],
+    "ssdp": [],
+    "version": "0.0.1",
+    "zeroconf": []
+}
