@@ -222,6 +222,7 @@ class BCNNApi:
         response = self.session.post("https://lk.bcnn.ru/readings", data=data)
         response.raise_for_status()
         LOGGER.debug("sent data %s", data)
+        LOGGER.debug(response.text)
         return "Показания успешно переданы"
 
     def get_address(self, account: Union[str, int]):

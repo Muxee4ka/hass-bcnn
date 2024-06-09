@@ -17,7 +17,7 @@ from homeassistant.components.sensor import (
     ENTITY_ID_FORMAT,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfVolume
+from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -33,7 +33,7 @@ from .const import (
 )
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
-from .helpers import _to_str, _to_float, _to_int, _to_date, _to_year, _to_bool
+from .helpers import _to_str, _to_float
 
 _LOGGER = logging.getLogger(__name__)
 
