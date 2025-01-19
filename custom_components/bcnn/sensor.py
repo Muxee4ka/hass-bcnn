@@ -116,16 +116,6 @@ SENSOR_TYPES: tuple[BCNNSensorEntityDescription, ...] = (
         avabl_fn=lambda data: CONF_PAYMENT in data,
         translation_key="balance",
     ),
-    # BCNNSensorEntityDescription(
-    #     key="readings_date",
-    #     name="Дата передачи показаний",
-    #     device_class=SensorDeviceClass.DATE,
-    #     value_fn=lambda data: _to_date(
-    #         data[CONF_READINGS][0].get(ATTR_DATE_POK), FORMAT_DATE_FULL_YEAR
-    #     ),  # "01.03.2023"
-    #     avabl_fn=lambda data: CONF_READINGS in data,
-    #     translation_key="readings_date",
-    # ),
     BCNNSensorEntityDescription(
         key="current_timestamp",
         name="Последнее обновление",
@@ -263,14 +253,16 @@ async def async_setup_entry(
                         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
                         device_class=SensorDeviceClass.WATER,
                         state_class=SensorStateClass.TOTAL,
-                        value_fn=lambda data: _to_float(data.get("value")),
+                        value_fn=lambda data: _to_float(data.get("cur_value") or data.get("prev_value")),
                         avabl_fn=lambda data: len(data) > 0,
                         translation_key=_get_meter_slug(_type, device_number),
                         attr_fn=lambda data: {
                             "device_number": data.get("device_number"),
                             "Услуга": data.get("device_type"),
                             "Номер счетчика": data.get("device_number"),
-                            "Последние переданные показания": data.get("value"),
+                            "Предыдущие показания": data.get("prev_value"),
+                            "Текущие показания": data.get("cur_value"),
+                            "Количество потреблённого ресурса": data.get("amount_water")
                         },
                     ),
                     device_number,

@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, date
 from itertools import islice
 from logging import getLogger
+from time import sleep
 from typing import Union, Tuple, Dict, Optional, List, Set, Any, Final
+from pprint import pformat
 
 from bs4 import BeautifulSoup
 from requests import Response, Session
@@ -24,17 +26,26 @@ HEADERS_JSON = {
 LOGGER = getLogger(__name__)
 
 
+def format_number(number, total_digits_before=5, digits_after=2):
+    formatted_number = f"{number:0{total_digits_before + digits_after + 1}.{digits_after}f}"
+    return formatted_number
+
+
 @dataclass(unsafe_hash=True)
 class DeviceInfo:
     account_number: str
     device_type: str
     device_number: str
     repr_number: str
-    value: str
+    prev_value: str
+    cur_value: str
+    amount_water: str
     new_value: str = None
+    formatter: tuple = (5, 5)
 
     def send_value(self):
-        return str(self.new_value or self.value)
+        return format_number(max(float(self.new_value or 0), float(self.cur_value or 0), float(self.prev_value or 0)),
+                             *[len(elem) for elem in self.formatter])
 
 
 def batched(iterable, n):
@@ -50,39 +61,27 @@ class BCNNApi:
     VERSION: Final[str] = "0.0.1"
 
     def __init__(self, login, password):
-        self._login: str = login
-        self._password: str = password
-        self._form_build_id: Optional[str] = None
-        self._form_token: Optional[str] = None
-        self._session: Optional[Session] = None
-        self.devices: Dict[str, Set[DeviceInfo]] = {}
+        self._session = None
+        self.login = login
+        self.password = password
+        self.base_url = "https://lk.bcnn.ru"
+        self.form_build_id = None
+        self.form_token = None
         self.start_session = None
+        self.devices: Dict[str, Set[DeviceInfo]] = {}
 
     @property
     def session(self) -> Session:
         if not self._session or self.session_is_expired():
             self._session = Session()
             self._session.headers = HEADERS_HTML
-            data = {
-                "name": self._login,
-                "pass": self._password,
-                "form_id": "user_login_form",
-                "op": "Войти",
-            }
-
-            response = self._session.post(
-                "https://lk.bcnn.ru/node/4?destination=/node/4", data=data
-            )
-            cookies = self._session.cookies.get_dict()
-            self.start_session = int(cookies.get("Drupal.visitor.autologout_login"))
-            if not response.ok:
-                raise
+            self.authenticate()
         return self._session
 
     def session_is_expired(self):
         if (
-            self.start_session
-            and self.start_session + 1800 > datetime.now().timestamp()
+                self.start_session
+                and self.start_session + 1800 > datetime.now().timestamp()
         ):
             return False
         return True
@@ -100,7 +99,7 @@ class BCNNApi:
 
         json_data = {"data": {}, "function": "getAccountInfo"}
         response: Response = self.session.post(
-            "https://lk.bcnn.ru/api/v1/cabinet/querydata",
+            f"{self.base_url}/api/v1/cabinet/querydata",
             headers=HEADERS_JSON,
             json=json_data,
         )
@@ -111,68 +110,100 @@ class BCNNApi:
 
         return response.json()
 
-    def get_form_info(self, account: Union[str, int]) -> Tuple[str, str]:
-        tag = "input"
-        attrs_form_build_id = {"name": "form_build_id"}
-        attrs_form_token = {"name": "form_token"}
+    def authenticate(self):
+        # Получаем страницу авторизации и извлекаем form_build_id
+        auth_page = self._session.get(f"{self.base_url}/node/4?destination=/node/4")
+        soup = BeautifulSoup(auth_page.text, "html.parser")
+        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
 
-        def get_form_info_from_soup(response: Response):
-            soup = BeautifulSoup(response.text, "lxml")
-            form_build_id = soup.find(tag, attrs_form_build_id)["value"]
-            form_token = soup.find(tag, attrs_form_token)["value"]
-            return form_build_id, form_token
+        # Отправляем данные авторизации
+        auth_data = {
+            "name": self.login,
+            "pass": self.password,
+            "form_build_id": self.form_build_id,
+            "form_id": "user_login_form",
+            "op": "Войти"
+        }
+        self._session.post(f"{self.base_url}/node/4?destination=/node/4", data=auth_data)
+        if "Drupal.visitor.autologout_login" not in self._session.cookies:
+            raise Exception("Не удалось авторизоваться.")
+        self.start_session = int(self._session.cookies.get("Drupal.visitor.autologout_login"))
+        LOGGER.info("Успешная авторизация.")
 
-        response = self.session.get("https://lk.bcnn.ru/readings")
-        form_build_id, form_token = get_form_info_from_soup(response)
-        data = {
-            "account_number": str(account),
+    def navigate_to_readings(self):
+        # Переход на страницу передачи показаний
+        response = self.session.get(f"{self.base_url}/readings")
+        soup = BeautifulSoup(response.text, "html.parser")
+        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
+        self.form_token = soup.find("input", {"name": "form_token"})["value"]
+        LOGGER.info("Загружена форма передачи показаний.")
+
+    def select_account(self, account_number):
+        # Смена лицевого счета
+        account_data = {
+            "account_number": account_number,
             "find_account": "OK",
-            "form_build_id": form_build_id,
-            "form_token": form_token,
-            "form_id": "readings_form",
+            "form_build_id": self.form_build_id,
+            "form_token": self.form_token,
+            "form_id": "readings_form"
         }
+        response = self.session.post(f"{self.base_url}/readings", data=account_data)
+        soup = BeautifulSoup(response.text, "html.parser")
+        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
+        self.form_token = soup.find("input", {"name": "form_token"})["value"]
+        LOGGER.info(f"Аккаунт {account_number} выбран.")
 
-        response = self.session.post("https://lk.bcnn.ru/readings", data=data)
-        return get_form_info_from_soup(response)
-
-    def get_information_on_water_meters(
-        self, account: Union[str, int]
-    ) -> List[Dict[str, str]]:
-        """
-
-        :param account:
-        :return:
-        [{'device_type': 'ГВС',
-          'device_number': '000000001',
-          'repr_number': 'cur_386538',
-          'value': '00106.608001'},
-         {'device_type': 'ГВС',
-          'device_number': '000000002',
-          'repr_number': 'cur_386541',
-          'value': '00106.608001'},
-         {'device_type': 'ХВС',
-          'device_number': '000000003',
-          'repr_number': 'cur_404612',
-          'value': '00150.00000'},
-         {'device_type': 'ХВС',
-          'device_number': '000000004',
-          'repr_number': 'cur_404614',
-          'value': '00081.00000'}]}
-        """
-        form_build_id, form_token = self.get_form_info(account)
-
-        data = {
-            "account_number": str(account),
+    def change_readings_form(self, account_number):
+        # Переход на ввод показаний
+        readings_data = {
+            "account_number": account_number,
             "op": "Изменить показания",
-            "form_build_id": form_build_id,
-            "form_token": form_token,
-            "form_id": "readings_form",
+            "form_build_id": self.form_build_id,
+            "form_token": self.form_token,
+            "form_id": "readings_form"
         }
-        self.session.post("https://lk.bcnn.ru/readings", data=data)
+        response = self.session.post(f"{self.base_url}/readings", data=readings_data)
+        soup = BeautifulSoup(response.text, "html.parser")
+        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
+        self.form_token = soup.find("input", {"name": "form_token"})["value"]
+        LOGGER.info("Форма для ввода показаний загружена.")
+        return response
 
-        response = self.session.get("https://lk.bcnn.ru/readings")
+    def enter_readings(self, account_number, readings):
+
+        self.change_readings_form(account_number)
+
+        # Передаем показания
+        final_data = {
+            "account_number": account_number,
+            **readings,
+            "ok": "1",
+            "op": "Передать показания",
+            "form_build_id": self.form_build_id,
+            "form_token": self.form_token,
+            "form_id": "readings_form"
+        }
+        response = self.session.post(f"{self.base_url}/readings", data=final_data)
+        LOGGER.debug("sent data %s", pformat(readings))
+        if "распечатать" in response.text:
+            LOGGER.info("Показания успешно переданы.")
+        else:
+            LOGGER.warning("Ошибка при передаче показаний.")
+
+    def get_information_on_water_meters(self, account: Union[str, int]) -> List[Dict[str, str]]:
+        """
+        Получение информации о водомерах для конкретного аккаунта и передача новых показаний.
+
+        :param account: Номер аккаунта
+        :return: Список словарей с информацией о водомерах
+        """
+        self.navigate_to_readings()
+        self.select_account(str(account))
+        response = self.change_readings_form(str(account))
         if not response.ok:
-            raise
+            raise Exception("Не удалось обновить данные формы после отправки")
+
+        # Парсинг ответа для извлечения информации о водомерах
         soup = BeautifulSoup(response.text, "lxml")
         water_meters = []
         for row in soup.find_all("tr"):
@@ -180,55 +211,58 @@ class BCNNApi:
             if columns:
                 device_type = columns[0].text.strip()
                 device_number = columns[1].text.strip()
-                value = columns[3].text.strip()
+                prev_value = columns[3].text.strip()
+                cur_value = columns[4].text.strip()
+                amount_water = columns[5].text.strip()
                 input_tag = row.find("input", {"name": re.compile(".+")})
                 repr_number = input_tag["name"] if input_tag else None
+                cabinet_change = row.find('input', {'onchange': re.compile('.+')})
+                pattern = r'cabinet_change\((\d+\.\d+)'
+                formatter = tuple(re.match(pattern, cabinet_change["onchange"]).group(1).split("."))
                 water_meters.append(
                     {
                         "device_type": device_type,
                         "device_number": device_number,
-                        "value": value,
-                        "repr_number": repr_number,
+                        "prev_value": prev_value,
+                        "cur_value": cur_value,
+                        "amount_water": amount_water,
+                        "repr_number": repr_number
                     }
                 )
-                self.devices.setdefault(account, set()).add(
-                    DeviceInfo(account, device_type, device_number, repr_number, value)
+                self.devices.setdefault(str(account), set()).add(
+                    DeviceInfo(account, device_type, device_number, repr_number, prev_value, cur_value, amount_water,
+                               formatter=formatter)
                 )
         return water_meters
 
     def send_meter_readings(
-        self,
-        account: Union[str, int],
-        readings: Optional[Tuple[Tuple[str, str], ...]] = None,
+            self,
+            account: Union[str, int],
+            readings: Optional[Tuple[Tuple[str, str], ...]] = None,
     ):
         if not readings:
             readings = tuple()
-        self.get_information_on_water_meters(account)
+
         for device_number, value in readings:
             self.add_meter_reading(account, device_number, value)
-        form_build_id, form_token = self.get_form_info(account)
-        data = {
-            "account_number": str(account),
-            "ok": "1",
-            "op": "Передать показания",
-            "form_build_id": form_build_id,
-            "form_token": form_token,
-            "form_id": "readings_form",
-            **{
-                device.repr_number: device.send_value()
-                for device in self.devices[account]
-            },
+
+        self.navigate_to_readings()
+        self.select_account(str(account))  # Подставьте нужный номер ЛС
+        readings = {
+            device.repr_number: device.send_value()
+            for device in self.devices[account]
         }
-        response = self.session.post("https://lk.bcnn.ru/readings", data=data)
-        response.raise_for_status()
-        LOGGER.debug("sent data %s", data)
-        LOGGER.debug(response.text)
+        self.enter_readings(str(account), readings)
+        sleep(30)
+        response = self.session.get(f"{self.base_url}/readings")
+        LOGGER.debug("response %s", response.text)
+
         return "Показания успешно переданы"
 
     def get_address(self, account: Union[str, int]):
         json_data = {"function": "getAddress", "data": {"occ": int(account)}}
         response = self.session.post(
-            "https://lk.bcnn.ru/api/v1/cabinet/querydata", json=json_data
+            f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
         )
         response.raise_for_status()
         return response.json()
@@ -250,12 +284,12 @@ class BCNNApi:
         }
 
         response = self.session.post(
-            "https://lk.bcnn.ru/api/v1/cabinet/querydata", json=json_data
+            f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
         )
         return response.json()
 
     def add_meter_reading(
-        self, account: Union[str, int], device_number: str, value: str
+            self, account: Union[str, int], device_number: str, value: str
     ):
         for device in self.devices.get(account, set()):
             if device_number != device.device_number:
@@ -266,14 +300,13 @@ class BCNNApi:
         """Getting pdf bill"""
         self.get_chart_data(account)
 
-        response = self.session.get("https://lk.bcnn.ru/to_payment_pdf")
+        response = self.session.get(f"{self.base_url}/to_payment_pdf")
         return response.content
 
     def get_charges(self, account: Union[str, int]) -> List[Dict[str, Any]]:
         self.get_chart_data(account)
 
-        response = self.session.get("https://lk.bcnn.ru/payments")
-        # Используем BeautifulSoup для парсинга HTML
+        response = self.session.get(f"{self.base_url}/payments")
         soup = BeautifulSoup(response.text, "html.parser")
 
         # Находим таблицу с начислениями по ее классу или другим уникальным атрибутам
@@ -320,8 +353,7 @@ class BCNNApi:
             return {}
         res = list(
             filter(
-                lambda x: x.get("period")
-                == max(map(lambda y: y.get("period"), payments)),
+                lambda x: x.get("period") == max(map(lambda y: y.get("period"), payments)),
                 payments,
             )
         )
