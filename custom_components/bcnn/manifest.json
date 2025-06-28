@@ -10,6 +10,6 @@
     "issue_tracker": "https://github.com/Muxee4ka/hass-bcnn/issues",
     "requirements": ["transliterate", "beautifulsoup4"],
     "ssdp": [],
-    "version": "0.1.0",
+    "version": "0.1.1",
     "zeroconf": []
 }

@@ -313,29 +313,33 @@ class BCNNApi:
         table = soup.find("table", {"data-drupal-selector": "edit-table1"})
 
         # Создаем список для хранения данных
+        data = []
         translation_mapper = {
-            "Период/ Услуга": "period_or_service",
+            "Период / Услуга": "period_or_service",
             "Входящее сальдо": "opening_balance",
             "Начислено": "accrued",
             "Оплачено": "paid",
             "К оплате": "due_payment",
         }
 
-        data = []
         column_names = [
-            translation_mapper[elem.text.strip()]
+            translation_mapper.get(elem.text.strip(), elem.text.strip())
             for elem in table.find_all("tr")[0].find_all("th")
             if elem
         ]
+        LOGGER.debug("Column names: %s", column_names)
         count_rows = len(table.find_all("tr")[1:])
 
         for batch in batched(table.find_all("tr")[1:], int(count_rows / 3)):
             period = {}
             first_row = [elem.text.strip() for elem in batch[0].find_all("td")]
             current_period = dict(zip(column_names, first_row))
-            period["period"] = convert_period_to_date(
-                current_period.pop("period_or_service")
+            period_col = next(
+                (k for k, v in current_period.items() if convert_period_to_date(v) != date.today()),
+                None
             )
+            if period_col:
+                period["period"] = convert_period_to_date(current_period.pop(period_col))
             period.update(current_period)
 
             for row in batch[1:]:
