@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta, date, datetime
 from typing import Any
 from typing import TYPE_CHECKING
@@ -178,17 +179,24 @@ MONTHS = {
 }
 
 
-def convert_period_to_date(period_str):
-    # Разбиваем строку по пробелам
-    split_period = (period_str or "").split()
-    if len(split_period) != 3:
+def convert_period_to_date(period_str: str) -> date:
+    """Преобразует строку периода вида 'месяц год г.' в дату.
+
+    Возвращает текущую дату при некорректном формате.
+    """
+    parts = (period_str or "").split()
+    if len(parts) != 3:
         return date.today()
-    month_str, year_str, _ = period_str.split()
+    month_str, year_str, _ = parts
 
-    # Переводим год в число
-    year = int(year_str)
+    # извлекаем год (например, из '2024' или '2024г.')
+    match = re.search(r"\d{4}", year_str)
+    if not match:
+        return date.today()
+    year = int(match.group())
 
-    # Создаем объект datetime
-    dt = date(year, MONTHS.get(month_str), 1)
+    month_num = MONTHS.get(month_str.lower())
+    if month_num is None:
+        return date.today()
 
-    return dt
+    return date(year, month_num, 1)

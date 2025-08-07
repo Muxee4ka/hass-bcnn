@@ -31,9 +31,18 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
         _LOGGER.info("Connecting to Center-SBK")
         _data = await hass.async_add_executor_job(partial(bcnn.get_accounts))
-        assert int(data[CONF_ACCOUNT]) in _data.get("data", {}).get(
-            "accountInfo", {}
-        ).get("accounts", [])
+
+        # извлекаем только цифры из введённого номера
+        account_str = str(data[CONF_ACCOUNT])
+        account_digits = "".join(ch for ch in account_str if ch.isdigit())
+        if not account_digits:
+            raise ValueError("Номер лицевого счёта должен содержать хотя бы одну цифру.")
+        account_int = int(account_digits)
+
+        # проверяем наличие номера в полученном списке
+        accounts = _data.get("data", {}).get("accountInfo", {}).get("accounts", [])
+        if account_int not in accounts:
+            raise ValueError(f"Лицевой счёт {account_str} не найден среди доступных в личном кабинете")
     except Exception as exc:
         _LOGGER.warning("Failed to connect to Center-SBK with error %s", exc)
         raise exc

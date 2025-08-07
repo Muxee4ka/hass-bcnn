@@ -70,6 +70,17 @@ class BCNNApi:
         self.start_session = None
         self.devices: Dict[str, Set[DeviceInfo]] = {}
 
+    def _parse_account_number(self, account: Union[str, int]) -> int:
+        """Извлекает все цифры из номера лицевого счёта.
+
+        Возвращает получившееся число. Если цифр нет, возбуждает ValueError.
+        """
+        import re
+        digits = re.sub(r"\D", "", str(account))
+        if not digits:
+            raise ValueError(f"Номер лицевого счёта '{account}' не содержит цифр")
+        return int(digits)
+
     @property
     def session(self) -> Session:
         if not self._session or self.session_is_expired():
@@ -260,10 +271,10 @@ class BCNNApi:
         return "Показания успешно переданы"
 
     def get_address(self, account: Union[str, int]):
-        json_data = {"function": "getAddress", "data": {"occ": int(account)}}
-        response = self.session.post(
-            f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
-        )
+        """Получить адрес по лицевому счёту."""
+        occ = self._parse_account_number(account)
+        json_data = {"function": "getAddress", "data": {"occ": occ}}
+        response = self.session.post(f"{self.base_url}/api/v1/cabinet/querydata", json=json_data)
         response.raise_for_status()
         return response.json()
 
@@ -274,18 +285,16 @@ class BCNNApi:
         end_period = today.strftime("%Y%m")
 
         begin_period = prev_month.strftime("%Y%m")
+        occ = self._parse_account_number(account)
         json_data = {
             "function": "getChartData",
             "data": {
-                "occ": int(account),
+                "occ": occ,
                 "beginPeriod": begin_period,
                 "endPeriod": end_period,
             },
         }
-
-        response = self.session.post(
-            f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
-        )
+        response = self.session.post(f"{self.base_url}/api/v1/cabinet/querydata", json=json_data)
         return response.json()
 
     def add_meter_reading(
