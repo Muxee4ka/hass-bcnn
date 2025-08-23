@@ -360,14 +360,21 @@ class BCNNApi:
         return data
 
     def get_current_payment(self, account: Union[str, int]) -> dict:
+        """Возвращает начисления за самый свежий период."""
         payments = self.get_charges(account)
         LOGGER.debug(payments)
         if not payments:
             return {}
-        res = list(
-            filter(
-                lambda x: x.get("period") == max(map(lambda y: y.get("period"), payments)),
-                payments,
-            )
-        )
-        return res.pop()
+
+        # выбираем только те периоды, которые определены
+        periods = [p.get("period") for p in payments if p.get("period")]
+        if not periods:
+            return {}
+
+        latest_period = max(periods)
+        for payment in payments:
+            if payment.get("period") == latest_period:
+                return payment
+        # на всякий случай возвращаем первый элемент
+        return payments[0]
+
