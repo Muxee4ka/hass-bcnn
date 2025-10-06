@@ -1,15 +1,18 @@
 {
     "domain": "bcnn",
     "name": "Center-SBK",
-    "codeowners": ["@muxee4ka"],
-    "config_flow": true,
-    "dependencies": [],
+    "version": "0.1.3",
     "documentation": "https://github.com/Muxee4ka/hass-bcnn",
-    "homekit": {},
-    "iot_class": "cloud_polling",
     "issue_tracker": "https://github.com/Muxee4ka/hass-bcnn/issues",
-    "requirements": ["transliterate", "beautifulsoup4"],
-    "ssdp": [],
-    "version": "0.1.2",
-    "zeroconf": []
+    "config_flow": true,
+    "codeowners": ["@muxee4ka"],
+    "requirements": [
+        "transliterate>=1.10.2",
+        "beautifulsoup4>=4.12.2"
+    ],
+    "dependencies": [],
+    "after_dependencies": [],
+    "iot_class": "cloud_polling",
+    "integration_type": "hub",
+    "is_built_in": false
 }
