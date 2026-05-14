@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, date
 from itertools import islice
 from logging import getLogger
+from pathlib import Path
 from pprint import pformat
 from typing import Any, Final
 
@@ -39,6 +41,13 @@ HEADERS_JSON = {
 }
 LOGGER = getLogger(__name__)
 REQUEST_TIMEOUT = 30
+
+def _read_manifest_version() -> str:
+    manifest = Path(__file__).parent / "manifest.json"
+    try:
+        return json.loads(manifest.read_text())["version"]
+    except Exception:
+        return "unknown"
 
 
 def format_number(number: float, total_digits_before: int = 5, digits_after: int = 2) -> str:
@@ -82,7 +91,7 @@ def _require_input(soup: BeautifulSoup, name: str, context: str) -> str:
 
 
 class BCNNApi:
-    VERSION: Final[str] = "0.0.1"
+    VERSION: Final[str] = _read_manifest_version()
 
     def __init__(self, login: str, password: str) -> None:
         self._session: Session | None = None
