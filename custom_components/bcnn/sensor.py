@@ -9,6 +9,10 @@ from datetime import datetime, date
 from typing import Any
 from transliterate import translit
 
+# Warm up transliterate at import time so it doesn't do blocking I/O
+# (os.listdir / import_module) inside the HA event loop on first call.
+translit("прогрев", "ru", reversed=True)
+
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,

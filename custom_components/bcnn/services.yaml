@@ -1,0 +1,76 @@
+refresh:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: bcnn
+
+get_bill:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: bcnn
+
+send_readings:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: bcnn
+    meter_1:
+      selector:
+        entity:
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_1_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_2:
+      selector:
+        entity:
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_2_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_3:
+      selector:
+        entity:
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_3_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_4:
+      selector:
+        entity:
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_4_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
