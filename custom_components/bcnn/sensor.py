@@ -254,14 +254,13 @@ async def async_setup_entry(
                         state_class=SensorStateClass.TOTAL,
                         value_fn=lambda data: _to_float(data.get("cur_value") or data.get("prev_value")),
                         avabl_fn=lambda data: len(data) > 0,
-                        translation_key=_get_meter_slug(_type, device_number),
                         attr_fn=lambda data: {
                             "device_number": data.get("device_number"),
                             "Услуга": data.get("device_type"),
                             "Номер счетчика": data.get("device_number"),
                             "Предыдущие показания": data.get("prev_value"),
                             "Текущие показания": data.get("cur_value"),
-                            "Количество потреблённого ресурса": data.get("amount_water")
+                            "Количество потреблённого ресурса": data.get("amount_water"),
                         },
                     ),
                     device_number,
@@ -269,4 +268,4 @@ async def async_setup_entry(
                 )
             )
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
