@@ -24,7 +24,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .const import (
-    DOMAIN,
     CONF_INFO,
     CONF_PAYMENT,
     CONF_READINGS,
@@ -232,7 +231,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up a config entry."""
 
-    coordinator: BCNNCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNSensor] = [
         BCNNSensor(coordinator, entity_description)

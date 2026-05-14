@@ -111,7 +111,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up a config entry."""
 
-    coordinator: BCNNCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNButtonEntity] = [
         BCNNButtonEntity(coordinator, entity_description)

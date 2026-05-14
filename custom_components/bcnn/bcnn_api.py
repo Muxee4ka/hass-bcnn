@@ -1,19 +1,34 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, date
 from itertools import islice
 from logging import getLogger
-from typing import Union, Tuple, Dict, Optional, List, Set, Any, Final
 from pprint import pformat
+from typing import Any, Final
 
+import requests
 from bs4 import BeautifulSoup
 from requests import Response, Session
 
+from custom_components.bcnn.exceptions import (
+    BCNNAuthError,
+    BCNNConnectionError,
+    BCNNParseError,
+)
 from custom_components.bcnn.helpers import convert_period_to_date
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+)
 HEADERS_HTML = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": USER_AGENT,
 }
@@ -25,9 +40,8 @@ HEADERS_JSON = {
 LOGGER = getLogger(__name__)
 
 
-def format_number(number, total_digits_before=5, digits_after=2):
-    formatted_number = f"{number:0{total_digits_before + digits_after + 1}.{digits_after}f}"
-    return formatted_number
+def format_number(number: float, total_digits_before: int = 5, digits_after: int = 2) -> str:
+    return f"{number:0{total_digits_before + digits_after + 1}.{digits_after}f}"
 
 
 @dataclass(unsafe_hash=True)
@@ -39,16 +53,19 @@ class DeviceInfo:
     prev_value: str
     cur_value: str
     amount_water: str
-    new_value: str = None
-    formatter: tuple = (5, 5)
+    new_value: str | None = None
+    formatter: tuple[str, ...] = (5, 5)
 
-    def send_value(self):
-        return format_number(max(float(self.new_value or 0), float(self.cur_value or 0), float(self.prev_value or 0)),
-                             *[len(elem) for elem in self.formatter])
+    def send_value(self) -> str:
+        value = max(
+            float(self.new_value or 0),
+            float(self.cur_value or 0),
+            float(self.prev_value or 0),
+        )
+        return format_number(value, *[len(elem) for elem in self.formatter])
 
 
-def batched(iterable, n):
-    # batched('ABCDEFG', 3) → ABC DEF G
+def batched(iterable: Any, n: int):
     if n < 1:
         raise ValueError("n must be at least one")
     it = iter(iterable)
@@ -56,28 +73,30 @@ def batched(iterable, n):
         yield batch
 
 
+def _require_input(soup: BeautifulSoup, name: str, context: str) -> str:
+    tag = soup.find("input", {"name": name})
+    if tag is None:
+        raise BCNNParseError(f"Не найден input[name={name!r}] на странице {context!r}")
+    return tag["value"]
+
+
 class BCNNApi:
     VERSION: Final[str] = "0.0.1"
 
-    def __init__(self, login, password):
-        self._session = None
+    def __init__(self, login: str, password: str) -> None:
+        self._session: Session | None = None
         self.login = login
         self.password = password
         self.base_url = "https://lk.bcnn.ru"
-        self.form_build_id = None
-        self.form_token = None
-        self.start_session = None
-        self.devices: Dict[str, Set[DeviceInfo]] = {}
+        self.form_build_id: str | None = None
+        self.form_token: str | None = None
+        self.start_session: int | None = None
+        self.devices: dict[str, set[DeviceInfo]] = {}
 
-    def _parse_account_number(self, account: Union[str, int]) -> int:
-        """Извлекает все цифры из номера лицевого счёта.
-
-        Возвращает получившееся число. Если цифр нет, возбуждает ValueError.
-        """
-        import re
+    def _parse_account_number(self, account: str | int) -> int:
         digits = re.sub(r"\D", "", str(account))
         if not digits:
-            raise ValueError(f"Номер лицевого счёта '{account}' не содержит цифр")
+            raise ValueError(f"Номер лицевого счёта {account!r} не содержит цифр")
         return int(digits)
 
     @property
@@ -88,17 +107,15 @@ class BCNNApi:
             self.authenticate()
         return self._session
 
-    def session_is_expired(self):
-        if (
-                self.start_session
-                and self.start_session + 1800 > datetime.now().timestamp()
-        ):
+    def session_is_expired(self) -> bool:
+        if self.start_session and self.start_session + 1800 > datetime.now().timestamp():
             return False
         return True
 
-    def get_accounts(self) -> dict:
-        """
-        return:
+    def get_accounts(self) -> dict[str, Any]:
+        """Возвращает список лицевых счетов из личного кабинета.
+
+        Пример ответа:
         {'code': 0,
          'data': {'accountInfo': {'accounts': [123456789, 987654321],
                                   'occ': 123456789,
@@ -106,85 +123,107 @@ class BCNNApi:
                   'errors': []},
          'message': 'Данные успешно получены'}
         """
-
         json_data = {"data": {}, "function": "getAccountInfo"}
-        response: Response = self.session.post(
-            f"{self.base_url}/api/v1/cabinet/querydata",
-            headers=HEADERS_JSON,
-            json=json_data,
-        )
-        response.raise_for_status()
-        if response.json().get("errors"):
-            errors = response.json().get("errors")
+        try:
+            response: Response = self.session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata",
+                headers=HEADERS_JSON,
+                json=json_data,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка запроса getAccountInfo: {exc}") from exc
+
+        payload = response.json()
+        if payload.get("errors"):
+            errors = payload["errors"]
             LOGGER.warning("API вернул ошибки: %s", errors)
-            raise ValueError(f"Ошибка API: {errors}")
+            raise BCNNConnectionError(f"Ошибка API: {errors}")
 
-        return response.json()
+        return payload
 
-    def authenticate(self):
-        # Получаем страницу авторизации и извлекаем form_build_id
-        auth_page = self._session.get(f"{self.base_url}/node/4?destination=/node/4")
+    def authenticate(self) -> None:
+        try:
+            auth_page = self._session.get(f"{self.base_url}/node/4?destination=/node/4")
+            auth_page.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Не удалось загрузить страницу авторизации: {exc}") from exc
+
         soup = BeautifulSoup(auth_page.text, "html.parser")
-        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
+        self.form_build_id = _require_input(soup, "form_build_id", "авторизация")
 
-        # Отправляем данные авторизации
         auth_data = {
             "name": self.login,
             "pass": self.password,
             "form_build_id": self.form_build_id,
             "form_id": "user_login_form",
-            "op": "Войти"
+            "op": "Войти",
         }
-        self._session.post(f"{self.base_url}/node/4?destination=/node/4", data=auth_data)
+        try:
+            self._session.post(f"{self.base_url}/node/4?destination=/node/4", data=auth_data)
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка при отправке формы авторизации: {exc}") from exc
+
         if "Drupal.visitor.autologout_login" not in self._session.cookies:
-            raise Exception("Не удалось авторизоваться.")
+            raise BCNNAuthError("Неверный логин или пароль")
+
         self.start_session = int(self._session.cookies.get("Drupal.visitor.autologout_login"))
         LOGGER.info("Успешная авторизация.")
 
-    def navigate_to_readings(self):
-        # Переход на страницу передачи показаний
-        response = self.session.get(f"{self.base_url}/readings")
+    def navigate_to_readings(self) -> None:
+        try:
+            response = self.session.get(f"{self.base_url}/readings")
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Не удалось загрузить страницу показаний: {exc}") from exc
+
         soup = BeautifulSoup(response.text, "html.parser")
-        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
-        self.form_token = soup.find("input", {"name": "form_token"})["value"]
+        self.form_build_id = _require_input(soup, "form_build_id", "/readings")
+        self.form_token = _require_input(soup, "form_token", "/readings")
         LOGGER.info("Загружена форма передачи показаний.")
 
-    def select_account(self, account_number):
-        # Смена лицевого счета
+    def select_account(self, account_number: str) -> None:
         account_data = {
             "account_number": account_number,
             "find_account": "OK",
             "form_build_id": self.form_build_id,
             "form_token": self.form_token,
-            "form_id": "readings_form"
+            "form_id": "readings_form",
         }
-        response = self.session.post(f"{self.base_url}/readings", data=account_data)
-        soup = BeautifulSoup(response.text, "html.parser")
-        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
-        self.form_token = soup.find("input", {"name": "form_token"})["value"]
-        LOGGER.info(f"Аккаунт {account_number} выбран.")
+        try:
+            response = self.session.post(f"{self.base_url}/readings", data=account_data)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка при выборе аккаунта {account_number}: {exc}") from exc
 
-    def change_readings_form(self, account_number):
-        # Переход на ввод показаний
+        soup = BeautifulSoup(response.text, "html.parser")
+        self.form_build_id = _require_input(soup, "form_build_id", "select_account")
+        self.form_token = _require_input(soup, "form_token", "select_account")
+        LOGGER.info("Аккаунт %s выбран.", account_number)
+
+    def change_readings_form(self, account_number: str) -> Response:
         readings_data = {
             "account_number": account_number,
             "op": "Изменить показания",
             "form_build_id": self.form_build_id,
             "form_token": self.form_token,
-            "form_id": "readings_form"
+            "form_id": "readings_form",
         }
-        response = self.session.post(f"{self.base_url}/readings", data=readings_data)
+        try:
+            response = self.session.post(f"{self.base_url}/readings", data=readings_data)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка при открытии формы показаний: {exc}") from exc
+
         soup = BeautifulSoup(response.text, "html.parser")
-        self.form_build_id = soup.find("input", {"name": "form_build_id"})["value"]
-        self.form_token = soup.find("input", {"name": "form_token"})["value"]
+        self.form_build_id = _require_input(soup, "form_build_id", "change_readings_form")
+        self.form_token = _require_input(soup, "form_token", "change_readings_form")
         LOGGER.info("Форма для ввода показаний загружена.")
         return response
 
-    def enter_readings(self, account_number, readings):
-
+    def enter_readings(self, account_number: str, readings: dict[str, str]) -> None:
         self.change_readings_form(account_number)
 
-        # Передаем показания
         final_data = {
             "account_number": account_number,
             **readings,
@@ -192,136 +231,162 @@ class BCNNApi:
             "op": "Передать показания",
             "form_build_id": self.form_build_id,
             "form_token": self.form_token,
-            "form_id": "readings_form"
+            "form_id": "readings_form",
         }
-        response = self.session.post(f"{self.base_url}/readings", data=final_data)
-        LOGGER.debug("sent data %s", pformat(readings))
+        try:
+            response = self.session.post(f"{self.base_url}/readings", data=final_data)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка при отправке показаний: {exc}") from exc
+
+        LOGGER.debug("Отправленные данные: %s", pformat(readings))
         if "распечатать" in response.text:
             LOGGER.info("Показания успешно переданы.")
         else:
-            LOGGER.warning("Ошибка при передаче показаний.")
+            LOGGER.warning("Ответ сервера не содержит признака успешной передачи показаний.")
 
-    def get_information_on_water_meters(self, account: Union[str, int]) -> List[Dict[str, str]]:
-        """
-        Получение информации о водомерах для конкретного аккаунта и передача новых показаний.
-
-        :param account: Номер аккаунта
-        :return: Список словарей с информацией о водомерах
-        """
+    def get_information_on_water_meters(self, account: str | int) -> list[dict[str, str]]:
         self.navigate_to_readings()
         self.select_account(str(account))
         response = self.change_readings_form(str(account))
-        if not response.ok:
-            raise Exception("Не удалось обновить данные формы после отправки")
 
-        # Парсинг ответа для извлечения информации о водомерах
         self.devices[str(account)] = set()
         soup = BeautifulSoup(response.text, "lxml")
-        water_meters = []
+        water_meters: list[dict[str, str]] = []
+
         for row in soup.find_all("tr"):
             columns = row.find_all("td")
-            if columns:
-                device_type = columns[0].text.strip()
-                device_number = columns[1].text.strip()
-                prev_value = columns[3].text.strip()
-                cur_value = columns[4].text.strip()
-                amount_water = columns[5].text.strip()
-                input_tag = row.find("input", {"name": re.compile(".+")})
-                repr_number = input_tag["name"] if input_tag else None
-                cabinet_change = row.find('input', {'onchange': re.compile('.+')})
-                pattern = r'cabinet_change\((\d+\.\d+)'
-                formatter = tuple(re.match(pattern, cabinet_change["onchange"]).group(1).split("."))
-                water_meters.append(
-                    {
-                        "device_type": device_type,
-                        "device_number": device_number,
-                        "prev_value": prev_value,
-                        "cur_value": cur_value,
-                        "amount_water": amount_water,
-                        "repr_number": repr_number
-                    }
+            if not columns:
+                continue
+
+            device_type = columns[0].text.strip()
+            device_number = columns[1].text.strip()
+            prev_value = columns[3].text.strip()
+            cur_value = columns[4].text.strip()
+            amount_water = columns[5].text.strip()
+
+            input_tag = row.find("input", {"name": re.compile(".+")})
+            repr_number = input_tag["name"] if input_tag else None
+
+            cabinet_change = row.find("input", {"onchange": re.compile(".+")})
+            if cabinet_change is None:
+                raise BCNNParseError(
+                    f"Не найден input[onchange] для счётчика {device_number!r} — структура сайта изменилась"
                 )
-                self.devices.setdefault(str(account), set()).add(
-                    DeviceInfo(account, device_type, device_number, repr_number, prev_value, cur_value, amount_water,
-                               formatter=formatter)
+            match = re.match(r"cabinet_change\((\d+\.\d+)", cabinet_change["onchange"])
+            if match is None:
+                raise BCNNParseError(
+                    f"Неожиданный формат onchange для счётчика {device_number!r}: {cabinet_change['onchange']!r}"
                 )
+            formatter = tuple(match.group(1).split("."))
+
+            water_meters.append(
+                {
+                    "device_type": device_type,
+                    "device_number": device_number,
+                    "prev_value": prev_value,
+                    "cur_value": cur_value,
+                    "amount_water": amount_water,
+                    "repr_number": repr_number,
+                }
+            )
+            self.devices[str(account)].add(
+                DeviceInfo(
+                    str(account),
+                    device_type,
+                    device_number,
+                    repr_number,
+                    prev_value,
+                    cur_value,
+                    amount_water,
+                    formatter=formatter,
+                )
+            )
         return water_meters
 
     def send_meter_readings(
-            self,
-            account: Union[str, int],
-            readings: Optional[Tuple[Tuple[str, str], ...]] = None,
-    ):
+        self,
+        account: str | int,
+        readings: tuple[tuple[str, str], ...] | None = None,
+    ) -> str:
         if not readings:
-            readings = tuple()
+            readings = ()
 
         for device_number, value in readings:
             self.add_meter_reading(account, device_number, value)
 
         self.navigate_to_readings()
-        self.select_account(str(account))  # Подставьте нужный номер ЛС
-        readings = {
+        self.select_account(str(account))
+        readings_payload = {
             device.repr_number: device.send_value()
-            for device in self.devices[account]
+            for device in self.devices.get(str(account), set())
         }
-        self.enter_readings(str(account), readings)
+        self.enter_readings(str(account), readings_payload)
         LOGGER.info("Показания переданы для аккаунта %s", account)
-
         return "Показания успешно переданы"
 
-    def get_address(self, account: Union[str, int]):
-        """Получить адрес по лицевому счёту."""
+    def get_address(self, account: str | int) -> dict[str, Any]:
         occ = self._parse_account_number(account)
         json_data = {"function": "getAddress", "data": {"occ": occ}}
-        response = self.session.post(f"{self.base_url}/api/v1/cabinet/querydata", json=json_data)
-        response.raise_for_status()
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка запроса getAddress: {exc}") from exc
         return response.json()
 
-    def get_chart_data(self, account: Union[str, int]):
+    def get_chart_data(self, account: str | int) -> dict[str, Any]:
         today = date.today()
         prev_month = today - timedelta(days=today.day)
-
-        end_period = today.strftime("%Y%m")
-
-        begin_period = prev_month.strftime("%Y%m")
         occ = self._parse_account_number(account)
         json_data = {
             "function": "getChartData",
             "data": {
                 "occ": occ,
-                "beginPeriod": begin_period,
-                "endPeriod": end_period,
+                "beginPeriod": prev_month.strftime("%Y%m"),
+                "endPeriod": today.strftime("%Y%m"),
             },
         }
-        response = self.session.post(f"{self.base_url}/api/v1/cabinet/querydata", json=json_data)
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка запроса getChartData: {exc}") from exc
         return response.json()
 
-    def add_meter_reading(
-            self, account: Union[str, int], device_number: str, value: str
-    ):
-        for device in self.devices.get(account, set()):
-            if device_number != device.device_number:
-                continue
-            device.new_value = value
+    def add_meter_reading(self, account: str | int, device_number: str, value: str) -> None:
+        for device in self.devices.get(str(account), set()):
+            if device.device_number == device_number:
+                device.new_value = value
 
-    def get_bill(self, account: Union[str, int]) -> Response.content:
-        """Getting pdf bill"""
+    def get_bill(self, account: str | int) -> bytes:
         self.get_chart_data(account)
-
-        response = self.session.get(f"{self.base_url}/to_payment_pdf")
+        try:
+            response = self.session.get(f"{self.base_url}/to_payment_pdf")
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка получения PDF: {exc}") from exc
         return response.content
 
-    def get_charges(self, account: Union[str, int]) -> List[Dict[str, Any]]:
+    def get_charges(self, account: str | int) -> list[dict[str, Any]]:
         self.get_chart_data(account)
 
-        response = self.session.get(f"{self.base_url}/payments")
+        try:
+            response = self.session.get(f"{self.base_url}/payments")
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BCNNConnectionError(f"Ошибка загрузки страницы платежей: {exc}") from exc
+
         soup = BeautifulSoup(response.text, "html.parser")
-
-        # Находим таблицу с начислениями по ее классу или другим уникальным атрибутам
         table = soup.find("table", {"data-drupal-selector": "edit-table1"})
+        if table is None:
+            raise BCNNParseError("Таблица начислений не найдена — структура сайта изменилась")
 
-        # Создаем список для хранения данных
-        data = []
+        data: list[dict[str, Any]] = []
         translation_mapper = {
             "Период / Услуга": "period_or_service",
             "Входящее сальдо": "opening_balance",
@@ -330,21 +395,28 @@ class BCNNApi:
             "К оплате": "due_payment",
         }
 
+        all_rows = table.find_all("tr")
+        if len(all_rows) < 2:
+            return data
+
         column_names = [
             translation_mapper.get(elem.text.strip(), elem.text.strip())
-            for elem in table.find_all("tr")[0].find_all("th")
-            if elem
+            for elem in all_rows[0].find_all("th")
         ]
         LOGGER.debug("Column names: %s", column_names)
-        count_rows = len(table.find_all("tr")[1:])
 
-        for batch in batched(table.find_all("tr")[1:], int(count_rows / 3)):
-            period = {}
+        data_rows = all_rows[1:]
+        count_rows = len(data_rows)
+        if count_rows == 0:
+            return data
+
+        for batch in batched(data_rows, max(1, count_rows // 3)):
+            period: dict[str, Any] = {}
             first_row = [elem.text.strip() for elem in batch[0].find_all("td")]
             current_period = dict(zip(column_names, first_row))
             period_col = next(
                 (k for k, v in current_period.items() if convert_period_to_date(v) != date.today()),
-                None
+                None,
             )
             if period_col:
                 period["period"] = convert_period_to_date(current_period.pop(period_col))
@@ -352,20 +424,17 @@ class BCNNApi:
 
             for row in batch[1:]:
                 columns = [elem.text.strip() for elem in row.find_all("td")]
-                period.setdefault("services", []).append(
-                    dict(zip(column_names, columns))
-                )
+                period.setdefault("services", []).append(dict(zip(column_names, columns)))
             data.append(period)
+
         return data
 
-    def get_current_payment(self, account: Union[str, int]) -> dict:
-        """Возвращает начисления за самый свежий период."""
+    def get_current_payment(self, account: str | int) -> dict[str, Any]:
         payments = self.get_charges(account)
         LOGGER.debug(payments)
         if not payments:
             return {}
 
-        # выбираем только те периоды, которые определены
         periods = [p.get("period") for p in payments if p.get("period")]
         if not periods:
             return {}
@@ -374,6 +443,4 @@ class BCNNApi:
         for payment in payments:
             if payment.get("period") == latest_period:
                 return payment
-        # на всякий случай возвращаем первый элемент
         return payments[0]
-

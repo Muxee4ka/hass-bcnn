@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -15,43 +14,30 @@ from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
 
-OPTIONS_SCHEMA = {
-    vol.Required(CONF_LOGIN, msg="Login"): str,
-    vol.Required(CONF_PASSWORD, msg="Password"): str,
-    vol.Required(CONF_ACCOUNT, msg="Account"): str,
-}
+type BCNNConfigEntry = ConfigEntry[BCNNCoordinator]
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool:
     """Set up Center-SBK from a config entry."""
+    _LOGGER.debug("async_setup_entry: entry_id=%s account=%s", entry.entry_id, entry.data[CONF_ACCOUNT])
 
-    _LOGGER.info("async_setup_entry: entry_id=%s account=%s", config_entry.entry_id, config_entry.data.get(CONF_ACCOUNT))
-    bcnn_api = BCNNApi(
-        str(config_entry.data.get(CONF_LOGIN)),
-        str(config_entry.data.get(CONF_PASSWORD)),
+    api = BCNNApi(
+        login=entry.data[CONF_LOGIN],
+        password=entry.data[CONF_PASSWORD],
     )
-    _coordinator = BCNNCoordinator(
-        hass, bcnn_api=bcnn_api, account=str(config_entry.data.get(CONF_ACCOUNT))
-    )
+    coordinator = BCNNCoordinator(hass, api=api, account=entry.data[CONF_ACCOUNT])
+    await coordinator.async_config_entry_first_refresh()
 
-    await _coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = coordinator
 
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = _coordinator
-
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
-
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
-
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(
-        config_entry, PLATFORMS
-    ):
-        hass.data[DOMAIN].pop(config_entry.entry_id)
-
-        await async_unload_services(hass)
-
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        await async_unload_services(hass, entry)
     return unload_ok

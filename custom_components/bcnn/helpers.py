@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import re
-from datetime import timedelta, date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.util import dt
 
 from .const import DOMAIN
 
@@ -43,14 +42,14 @@ async def async_get_device_friendly_name(
 async def async_get_coordinator(
     hass: HomeAssistant, device_id: str | None
 ) -> BCNNCoordinator:
-    """Get coordinator for device id"""
-
+    """Get coordinator for device id via runtime_data."""
     device_entry = await async_get_device_entry_by_device_id(hass, device_id)
     for entry_id in device_entry.config_entries:
-        if (config_entry := hass.config_entries.async_get_entry(entry_id)) is None:
+        config_entry = hass.config_entries.async_get_entry(entry_id)
+        if config_entry is None or config_entry.domain != DOMAIN:
             continue
-        if config_entry.domain == DOMAIN:
-            return hass.data[DOMAIN][entry_id]
+        coordinator: BCNNCoordinator = config_entry.runtime_data
+        return coordinator
 
     raise ValueError(f"Config entry for {device_id} not found")
 
@@ -63,15 +62,6 @@ def get_float_value(hass: HomeAssistant, entity_id: str | None) -> float | None:
             return _to_float(cur_state.state)
     return None
 
-
-def get_upbdate_interval(hour: int, minute: int, second: int) -> timedelta:
-    """Get update interval to time"""
-    now = dt.now()
-    next_day = now + timedelta(days=1)
-    next_time = next_day.replace(hour=hour, minute=minute, second=second)
-    minutes_to_next_time = (next_time - now).total_seconds() / 60
-    interval = timedelta(minutes=minutes_to_next_time)
-    return interval
 
 
 def get_previous_month() -> date:

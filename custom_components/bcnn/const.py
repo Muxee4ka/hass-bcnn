@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Final
 
 from homeassistant.const import Platform
@@ -11,14 +10,11 @@ ATTRIBUTION: Final = "Данные получены от Центр-СБК"
 DOMAIN: Final = "bcnn"
 MANUFACTURER: Final = "Центр-СБК"
 
-
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 CONF_LOGIN: Final = "login"
 CONF_PASSWORD: Final = "password"
 CONF_ACCOUNT: Final = "account"
-CONF_DATA: Final = "data"
-CONF_LINK: Final = "link"
 CONF_INFO: Final = "info"
 CONF_PAYMENT: Final = "payment"
 CONF_READINGS: Final = "readings"
@@ -35,8 +31,6 @@ ATTR_CW_2: Final = "cw2"
 ATTR_CW_2_VAL: Final = "cw2val"
 ATTR_HW_2: Final = "hw2"
 ATTR_HW_2_VAL: Final = "hw2val"
-ATTR_COORDINATOR: Final = "coordinator"
-ATTR_READINGS = "readings"
-ATTR_BALANCE = "balance"
+ATTR_READINGS: Final = "readings"
 
 CONFIGURATION_URL: Final = "https://lk.bcnn.ru/"
