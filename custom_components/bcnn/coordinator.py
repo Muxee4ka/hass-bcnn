@@ -25,6 +25,7 @@ from .const import (
     CONF_READINGS,
     ATTR_LAST_UPDATE_TIME,
 )
+from .exceptions import BCNNAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +65,9 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 payment = await self.hass.async_add_executor_job(
                     partial(self._api.get_current_payment, self.account)
                 )
+        except BCNNAuthError as error:
+            self.config_entry.async_start_reauth(self.hass)
+            raise UpdateFailed(f"Ошибка аутентификации Center-SBK: {error}") from error
         except Exception as error:
             raise UpdateFailed(
                 f"Ошибка получения данных Center-SBK: {error}"

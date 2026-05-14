@@ -4,21 +4,29 @@
     "step": {
       "user": {
         "title": "",
+        "description": "Все лицевые счета, привязанные к аккаунту, будут добавлены автоматически.",
         "data": {
-          "login": "Email или лицевой счет",
-          "password": "Пароль",
-          "account": "Номер лицевого счета"
+          "login": "Email или лицевой счёт",
+          "password": "Пароль"
+        }
+      },
+      "reauth": {
+        "title": "Обновление пароля",
+        "description": "Введите новый пароль для аккаунта {login}.",
+        "data": {
+          "password": "Пароль"
         }
       }
     },
     "error": {
       "cannot_connect": "Не удалось подключиться.",
-      "invalid_auth": "Ошибка аутентификации.",
+      "invalid_auth": "Неверный логин или пароль.",
       "unknown": "Непредвиденная ошибка.",
-      "no_devices": "В аккаунте не найдено ни одного устройства."
+      "no_accounts": "В аккаунте не найдено ни одного лицевого счёта."
     },
     "abort": {
-      "already_configured": "Этот аккаунт уже добавлено в Home Assistant.",
+      "already_configured": "Этот аккаунт уже добавлен в Home Assistant.",
+      "all_accounts_configured": "Все лицевые счета этого аккаунта уже добавлены в Home Assistant.",
       "reauth_successful": "Повторная аутентификация выполнена успешно."
     }
   },

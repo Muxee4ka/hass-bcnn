@@ -38,6 +38,7 @@ HEADERS_JSON = {
     "User-Agent": USER_AGENT,
 }
 LOGGER = getLogger(__name__)
+REQUEST_TIMEOUT = 30
 
 
 def format_number(number: float, total_digits_before: int = 5, digits_after: int = 2) -> str:
@@ -129,22 +130,31 @@ class BCNNApi:
                 f"{self.base_url}/api/v1/cabinet/querydata",
                 headers=HEADERS_JSON,
                 json=json_data,
+                timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка запроса getAccountInfo: {exc}") from exc
 
-        payload = response.json()
+        try:
+            payload = response.json()
+        except Exception as exc:
+            LOGGER.error("Не удалось разобрать ответ getAccountInfo: %s\nТело ответа: %.500s", exc, response.text)
+            raise BCNNConnectionError(f"Неверный формат ответа getAccountInfo: {exc}") from exc
+
+        LOGGER.debug("getAccountInfo ответ: %s", payload)
         if payload.get("errors"):
             errors = payload["errors"]
-            LOGGER.warning("API вернул ошибки: %s", errors)
+            LOGGER.warning("API вернул ошибки getAccountInfo: %s", errors)
             raise BCNNConnectionError(f"Ошибка API: {errors}")
 
         return payload
 
     def authenticate(self) -> None:
         try:
-            auth_page = self._session.get(f"{self.base_url}/node/4?destination=/node/4")
+            auth_page = self._session.get(
+                f"{self.base_url}/node/4?destination=/node/4", timeout=REQUEST_TIMEOUT
+            )
             auth_page.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Не удалось загрузить страницу авторизации: {exc}") from exc
@@ -160,7 +170,11 @@ class BCNNApi:
             "op": "Войти",
         }
         try:
-            self._session.post(f"{self.base_url}/node/4?destination=/node/4", data=auth_data)
+            self._session.post(
+                f"{self.base_url}/node/4?destination=/node/4",
+                data=auth_data,
+                timeout=REQUEST_TIMEOUT,
+            )
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка при отправке формы авторизации: {exc}") from exc
 
@@ -172,7 +186,7 @@ class BCNNApi:
 
     def navigate_to_readings(self) -> None:
         try:
-            response = self.session.get(f"{self.base_url}/readings")
+            response = self.session.get(f"{self.base_url}/readings", timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Не удалось загрузить страницу показаний: {exc}") from exc
@@ -191,7 +205,9 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(f"{self.base_url}/readings", data=account_data)
+            response = self.session.post(
+                f"{self.base_url}/readings", data=account_data, timeout=REQUEST_TIMEOUT
+            )
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка при выборе аккаунта {account_number}: {exc}") from exc
@@ -210,7 +226,9 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(f"{self.base_url}/readings", data=readings_data)
+            response = self.session.post(
+                f"{self.base_url}/readings", data=readings_data, timeout=REQUEST_TIMEOUT
+            )
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка при открытии формы показаний: {exc}") from exc
@@ -234,7 +252,9 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(f"{self.base_url}/readings", data=final_data)
+            response = self.session.post(
+                f"{self.base_url}/readings", data=final_data, timeout=REQUEST_TIMEOUT
+            )
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка при отправке показаний: {exc}") from exc
@@ -330,7 +350,9 @@ class BCNNApi:
         json_data = {"function": "getAddress", "data": {"occ": occ}}
         try:
             response = self.session.post(
-                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+                f"{self.base_url}/api/v1/cabinet/querydata",
+                json=json_data,
+                timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
@@ -351,7 +373,9 @@ class BCNNApi:
         }
         try:
             response = self.session.post(
-                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+                f"{self.base_url}/api/v1/cabinet/querydata",
+                json=json_data,
+                timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
@@ -366,7 +390,7 @@ class BCNNApi:
     def get_bill(self, account: str | int) -> bytes:
         self.get_chart_data(account)
         try:
-            response = self.session.get(f"{self.base_url}/to_payment_pdf")
+            response = self.session.get(f"{self.base_url}/to_payment_pdf", timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка получения PDF: {exc}") from exc
@@ -376,7 +400,7 @@ class BCNNApi:
         self.get_chart_data(account)
 
         try:
-            response = self.session.get(f"{self.base_url}/payments")
+            response = self.session.get(f"{self.base_url}/payments", timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
         except requests.RequestException as exc:
             raise BCNNConnectionError(f"Ошибка загрузки страницы платежей: {exc}") from exc
