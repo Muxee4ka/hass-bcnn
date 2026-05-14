@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, date
 from itertools import islice
 from logging import getLogger
-from time import sleep
 from typing import Union, Tuple, Dict, Optional, List, Set, Any, Final
 from pprint import pformat
 
@@ -116,8 +115,9 @@ class BCNNApi:
         )
         response.raise_for_status()
         if response.json().get("errors"):
-            LOGGER.warning(response.json().get("errors"))
-            raise
+            errors = response.json().get("errors")
+            LOGGER.warning("API вернул ошибки: %s", errors)
+            raise ValueError(f"Ошибка API: {errors}")
 
         return response.json()
 
@@ -215,6 +215,7 @@ class BCNNApi:
             raise Exception("Не удалось обновить данные формы после отправки")
 
         # Парсинг ответа для извлечения информации о водомерах
+        self.devices[str(account)] = set()
         soup = BeautifulSoup(response.text, "lxml")
         water_meters = []
         for row in soup.find_all("tr"):
@@ -264,9 +265,7 @@ class BCNNApi:
             for device in self.devices[account]
         }
         self.enter_readings(str(account), readings)
-        sleep(30)
-        response = self.session.get(f"{self.base_url}/readings")
-        LOGGER.debug("response %s", response.text)
+        LOGGER.info("Показания переданы для аккаунта %s", account)
 
         return "Показания успешно переданы"
 

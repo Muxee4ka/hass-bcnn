@@ -25,7 +25,7 @@ OPTIONS_SCHEMA = {
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up Center-SBK from a config entry."""
 
-    _LOGGER.info(["async_setup_entry", config_entry.data, config_entry.options])
+    _LOGGER.info("async_setup_entry: entry_id=%s account=%s", config_entry.entry_id, config_entry.data.get(CONF_ACCOUNT))
     bcnn_api = BCNNApi(
         str(config_entry.data.get(CONF_LOGIN)),
         str(config_entry.data.get(CONF_PASSWORD)),

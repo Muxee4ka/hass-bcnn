@@ -8,7 +8,9 @@
     "codeowners": ["@muxee4ka"],
     "requirements": [
         "transliterate>=1.10.2",
-        "beautifulsoup4>=4.12.2"
+        "beautifulsoup4>=4.12.2",
+        "lxml>=4.9.0",
+        "requests>=2.31.0"
     ],
     "dependencies": [],
     "after_dependencies": [],

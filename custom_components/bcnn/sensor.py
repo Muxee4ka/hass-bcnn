@@ -95,7 +95,7 @@ SENSOR_TYPES: tuple[BCNNSensorEntityDescription, ...] = (
             "К оплате": _to_float(data[CONF_PAYMENT].get("due_payment")),
             **{
                 elem.get("period_or_service"): elem.get("due_payment")
-                for elem in data[CONF_PAYMENT].get("services")
+                for elem in (data[CONF_PAYMENT].get("services") or [])
             },
         },
     ),
@@ -163,14 +163,16 @@ class BCNNSensor(BCNNBaseCoordinatorEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self._attr_native_value = self.entity_description.value_fn(self._get_data())
+        data = self._get_data()
+        if data is None:
+            self.async_write_ha_state()
+            return
 
-        self._attr_extra_state_attributes = self.entity_description.attr_fn(
-            self._get_data()
-        )
+        self._attr_native_value = self.entity_description.value_fn(data)
+        self._attr_extra_state_attributes = self.entity_description.attr_fn(data)
 
         if self.entity_description.icon_fn is not None:
-            self._attr_icon = self.entity_description.icon_fn(self._get_data())
+            self._attr_icon = self.entity_description.icon_fn(data)
 
         self.coordinator.logger.debug(
             "Entity ID: %s Value: %s", self.entity_id, self.native_value
@@ -200,18 +202,16 @@ class BCNNMeterSensor(BCNNSensor):
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get data for Sensor"""
-        if CONF_READINGS in self.coordinator.data:
-            _LOGGER.debug(self.device_number)
-            _LOGGER.debug(self.coordinator.data)
-            _data = list(
-                filter(
-                    lambda x: x.get("device_number") == self.device_number,
-                    self.coordinator.data[CONF_READINGS],
-                )
-            ).pop()
-        else:
-            _data = None
-        return _data
+        if CONF_READINGS not in self.coordinator.data:
+            return None
+        return next(
+            (
+                x
+                for x in self.coordinator.data[CONF_READINGS]
+                if x.get("device_number") == self.device_number
+            ),
+            None,
+        )
 
 
 def _get_meter_slug(_type: str, number_meter: str) -> str:

@@ -6,7 +6,6 @@ import re
 from datetime import timedelta, date, datetime
 from typing import Any
 from typing import TYPE_CHECKING
-import locale
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -16,10 +15,6 @@ from .const import DOMAIN
 
 if TYPE_CHECKING:
     from .coordinator import BCNNCoordinator
-
-
-# Устанавливаем русскую локаль, чтобы правильно интерпретировать названия месяцев
-locale.setlocale(locale.LC_TIME, "ru_RU.UTF-8")
 
 
 async def async_get_device_entry_by_device_id(
