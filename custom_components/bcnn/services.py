@@ -15,25 +15,9 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
-from .const import (
-    DOMAIN,
-    CONF_READINGS,
-    ATTR_CW_1,
-    ATTR_CW_1_VAL,
-    ATTR_HW_1,
-    ATTR_HW_1_VAL,
-    ATTR_HW_2,
-    ATTR_HW_2_VAL,
-    ATTR_CW_2,
-    ATTR_CW_2_VAL,
-    ATTR_READINGS,
-)
+from .const import DOMAIN, ATTR_READINGS, METER_SLOTS
 from .coordinator import BCNNCoordinator
-from .helpers import (
-    get_float_value,
-    async_get_coordinator,
-    get_previous_month,
-)
+from .helpers import async_get_coordinator, get_previous_month
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,14 +32,14 @@ SERVICE_REFRESH_SCHEMA = vol.Schema({**SERVICE_BASE_SCHEMA})
 SERVICE_SEND_READINGS_SCHEMA = vol.Schema(
     {
         **SERVICE_BASE_SCHEMA,
-        vol.Required(ATTR_CW_1): cv.entity_id,
-        vol.Required(ATTR_CW_1_VAL): cv.entity_id,
-        vol.Optional(ATTR_HW_1): cv.entity_id,
-        vol.Optional(ATTR_HW_1_VAL): cv.entity_id,
-        vol.Optional(ATTR_CW_2): cv.entity_id,
-        vol.Optional(ATTR_CW_2_VAL): cv.entity_id,
-        vol.Optional(ATTR_HW_2): cv.entity_id,
-        vol.Optional(ATTR_HW_2_VAL): cv.entity_id,
+        **{
+            key: validator
+            for i in range(1, METER_SLOTS + 1)
+            for key, validator in [
+                (vol.Optional(f"meter_{i}"), cv.entity_id),
+                (vol.Optional(f"meter_{i}_value"), vol.Coerce(float)),
+            ]
+        },
     }
 )
 
@@ -81,34 +65,24 @@ async def _async_handle_refresh(
 async def _async_handle_send_readings(
     hass: HomeAssistant, service_call: ServiceCall, coordinator: BCNNCoordinator
 ) -> dict[str, Any]:
-    meters = (
-        (ATTR_CW_1, ATTR_CW_1_VAL),
-        (ATTR_HW_1, ATTR_HW_1_VAL),
-        (ATTR_HW_2, ATTR_HW_2_VAL),
-        (ATTR_CW_2, ATTR_CW_2_VAL),
-    )
     readings: dict[str, str] = {}
-    _LOGGER.debug("send_readings data: %s", service_call.data)
 
-    for meter, meter_val in meters:
-        meter_entity_id = service_call.data.get(meter)
-        meter_value = get_float_value(hass, service_call.data.get(meter_val))
-        if meter_entity_id is None or meter_value is None:
+    for i in range(1, METER_SLOTS + 1):
+        entity_id = service_call.data.get(f"meter_{i}")
+        value = service_call.data.get(f"meter_{i}_value")
+        if entity_id is None or value is None:
             continue
-        meter_state = hass.states.get(meter_entity_id)
-        if meter_state is None:
+        state = hass.states.get(entity_id)
+        if state is None:
+            _LOGGER.warning("send_readings: сенсор %s не найден", entity_id)
             continue
-        device_number = meter_state.attributes.get("device_number")
-        if device_number:
-            readings[device_number] = str(float(meter_value))
+        device_number = state.attributes.get("device_number")
+        if device_number is None:
+            _LOGGER.warning("send_readings: у сенсора %s нет атрибута device_number", entity_id)
+            continue
+        readings[device_number] = str(float(value))
 
-    if len(coordinator.data[CONF_READINGS]) != len(readings):
-        raise HomeAssistantError(
-            f"{service_call.service}: несоответствие числа счётчиков для "
-            f'"{coordinator.account}": получено {len(readings)}, '
-            f"ожидается {len(coordinator.data[CONF_READINGS])}"
-        )
-
+    _LOGGER.debug("send_readings: передаём показания %s", readings)
     result = await coordinator.async_send_readings(tuple(readings.items()))
     if result is None:
         raise HomeAssistantError(f"{service_call.service}: пустой ответ от API.")

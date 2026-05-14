@@ -54,16 +54,6 @@ async def async_get_coordinator(
     raise ValueError(f"Config entry for {device_id} not found")
 
 
-def get_float_value(hass: HomeAssistant, entity_id: str | None) -> float | None:
-    """Get float value from entity state"""
-    if entity_id is not None:
-        cur_state = hass.states.get(entity_id)
-        if cur_state is not None:
-            return _to_float(cur_state.state)
-    return None
-
-
-
 def get_previous_month() -> date:
     """Get first day of previous month"""
     today = date.today()

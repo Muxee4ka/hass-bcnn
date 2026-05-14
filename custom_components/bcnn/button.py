@@ -56,16 +56,16 @@ BUTTON_DESCRIPTIONS: tuple[BCNNButtonEntityDescription, ...] = (
         ),
         translation_key="get_bill",
     ),
-    # BCNNButtonEntityDescription(
-    #     key="send_readings",
-    #     icon="mdi:arrow-top-right",
-    #     name="Отправить показания",
-    #     entity_category=EntityCategory.DIAGNOSTIC,
-    #     async_press=lambda coordinator, device_id: coordinator.hass.services.async_call(
-    #         DOMAIN, SERVICE_SEND_READINGS, {ATTR_DEVICE_ID: device_id}, blocking=True
-    #     ),
-    #     translation_key="send_readings",
-    # ),
+    BCNNButtonEntityDescription(
+        key="send_readings",
+        icon="mdi:arrow-top-right",
+        name="Отправить показания",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        async_press=lambda coordinator, device_id: coordinator.hass.services.async_call(
+            DOMAIN, SERVICE_SEND_READINGS, {ATTR_DEVICE_ID: device_id}, blocking=True
+        ),
+        translation_key="send_readings",
+    ),
 )
 
 
@@ -118,4 +118,4 @@ async def async_setup_entry(
         for entity_description in BUTTON_DESCRIPTIONS
     ]
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)

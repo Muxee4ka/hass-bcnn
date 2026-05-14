@@ -23,14 +23,7 @@ ATTR_LAST_UPDATE_TIME: Final = "last_update_time"
 DEVICE_NAME_FORMAT: Final = "ЛC №{}"
 ATTR_MODEL_PU: Final = "ModelPU"
 
-ATTR_CW_1: Final = "cw1"
-ATTR_CW_1_VAL: Final = "cw1val"
-ATTR_HW_1: Final = "hw1"
-ATTR_HW_1_VAL: Final = "hw1val"
-ATTR_CW_2: Final = "cw2"
-ATTR_CW_2_VAL: Final = "cw2val"
-ATTR_HW_2: Final = "hw2"
-ATTR_HW_2_VAL: Final = "hw2val"
 ATTR_READINGS: Final = "readings"
+METER_SLOTS: Final = 4
 
 CONFIGURATION_URL: Final = "https://lk.bcnn.ru/"
