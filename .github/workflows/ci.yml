@@ -30,3 +30,22 @@ jobs:
 
       - name: ruff format --check
         run: ruff format --check custom_components
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install pytest beautifulsoup4 lxml requests voluptuous
+
+      - name: pytest
+        run: pytest tests/

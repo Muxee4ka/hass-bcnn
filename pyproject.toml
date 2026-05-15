@@ -43,7 +43,6 @@ warn_redundant_casts = true
 no_implicit_optional = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 

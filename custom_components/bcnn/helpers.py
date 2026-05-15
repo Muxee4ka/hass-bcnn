@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-import re
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
+from .parsers import MONTHS, convert_period_to_date
+
+__all__ = [
+    "MONTHS",
+    "async_get_coordinator",
+    "async_get_device_entry_by_device_id",
+    "async_get_device_friendly_name",
+    "convert_period_to_date",
+    "get_previous_month",
+]
 
 if TYPE_CHECKING:
     from .coordinator import BCNNCoordinator
@@ -129,42 +138,3 @@ def _to_year(value: str | None, fmt: str) -> int | None:
         return None
 
     return _year
-
-
-MONTHS = {
-    "январь": 1,
-    "февраль": 2,
-    "март": 3,
-    "апрель": 4,
-    "май": 5,
-    "июнь": 6,
-    "июль": 7,
-    "август": 8,
-    "сентябрь": 9,
-    "октябрь": 10,
-    "ноябрь": 11,
-    "декабрь": 12,
-}
-
-
-def convert_period_to_date(period_str: str) -> date:
-    """Преобразует строку периода вида 'месяц год г.' в дату.
-
-    Возвращает текущую дату при некорректном формате.
-    """
-    parts = (period_str or "").split()
-    if len(parts) != 3:
-        return date.today()
-    month_str, year_str, _ = parts
-
-    # извлекаем год (например, из '2024' или '2024г.')
-    match = re.search(r"\d{4}", year_str)
-    if not match:
-        return date.today()
-    year = int(match.group())
-
-    month_num = MONTHS.get(month_str.lower())
-    if month_num is None:
-        return date.today()
-
-    return date(year, month_num, 1)

@@ -19,7 +19,7 @@ from custom_components.bcnn.exceptions import (
     BCNNConnectionError,
     BCNNParseError,
 )
-from custom_components.bcnn.helpers import convert_period_to_date
+from custom_components.bcnn.parsers import convert_period_to_date
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

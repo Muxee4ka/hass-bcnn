@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<body>
+<form action="/readings" method="post" id="readings-form" accept-charset="UTF-8">
+  <input type="hidden" name="form_build_id" value="form-READ456" />
+  <input type="hidden" name="form_token" value="token-READ789" />
+  <input type="hidden" name="form_id" value="readings_form" />
+
+  <table>
+    <thead>
+      <tr>
+        <th>Тип</th>
+        <th>Номер</th>
+        <th>Дата</th>
+        <th>Пред.</th>
+        <th>Тек.</th>
+        <th>Расход</th>
+        <th>Новое</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Холодная вода</td>
+        <td>12345678</td>
+        <td>2026-04-25</td>
+        <td>105.123</td>
+        <td>110.456</td>
+        <td>5.333</td>
+        <td>
+          <input type="text"
+                 name="cw_12345678"
+                 value="110.456"
+                 onchange="cabinet_change(5.3, this, 110.456)" />
+        </td>
+      </tr>
+      <tr>
+        <td>Горячая вода</td>
+        <td>87654321</td>
+        <td>2026-04-25</td>
+        <td>50.500</td>
+        <td>53.750</td>
+        <td>3.250</td>
+        <td>
+          <input type="text"
+                 name="hw_87654321"
+                 value="53.750"
+                 onchange="cabinet_change(5.3, this, 53.750)" />
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</form>
+</body>
+</html>
