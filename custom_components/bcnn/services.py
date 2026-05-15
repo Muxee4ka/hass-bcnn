@@ -51,9 +51,7 @@ SERVICE_GET_BILL_SCHEMA = vol.Schema({**SERVICE_BASE_SCHEMA})
 @dataclass
 class ServiceDescription:
     name: str
-    service_func: Callable[
-        [HomeAssistant, ServiceCall, BCNNCoordinator], Awaitable[dict[str, Any]]
-    ]
+    service_func: Callable[[HomeAssistant, ServiceCall, BCNNCoordinator], Awaitable[dict[str, Any]]]
     schema: vol.Schema | None = None
 
 
@@ -84,7 +82,8 @@ def _collect_readings_from_numbers(
         except (TypeError, ValueError):
             _LOGGER.warning(
                 "send_readings: значение %s в %s не приводится к числу",
-                state.state, entry.entity_id,
+                state.state,
+                entry.entity_id,
             )
             continue
         readings[device_number] = str(value)
@@ -103,14 +102,11 @@ def _collect_readings_from_slots(
             continue
         if entity_id is None or value is None:
             raise HomeAssistantError(
-                f"send_readings: слот #{i} заполнен частично — "
-                "укажите и счётчик, и значение."
+                f"send_readings: слот #{i} заполнен частично — " "укажите и счётчик, и значение."
             )
         state = hass.states.get(entity_id)
         if state is None:
-            raise HomeAssistantError(
-                f"send_readings: сенсор {entity_id} не найден."
-            )
+            raise HomeAssistantError(f"send_readings: сенсор {entity_id} не найден.")
         device_number = state.attributes.get(ATTR_DEVICE_NUMBER)
         if device_number is None:
             raise HomeAssistantError(
@@ -236,9 +232,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 },
                 context=service_call.context,
             )
-            raise HomeAssistantError(
-                f"Service call {service_call.service} failed: {exc}"
-            ) from exc
+            raise HomeAssistantError(f"Service call {service_call.service} failed: {exc}") from exc
 
     for service in SERVICES.values():
         if not hass.services.has_service(DOMAIN, service.name):
@@ -250,7 +244,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 async def async_unload_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove services only when the last Center-SBK entry is unloaded."""
     remaining = [
-        e for e in hass.config_entries.async_entries(DOMAIN)
+        e
+        for e in hass.config_entries.async_entries(DOMAIN)
         if e.entry_id != entry.entry_id and e.state.recoverable
     ]
     if remaining:

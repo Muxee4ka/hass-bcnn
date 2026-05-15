@@ -29,18 +29,14 @@ async def async_get_device_entry_by_device_id(
     raise ValueError(f"Device {device_id} not found")
 
 
-async def async_get_device_friendly_name(
-    hass: HomeAssistant, device_id: str | None
-) -> str | None:
+async def async_get_device_friendly_name(hass: HomeAssistant, device_id: str | None) -> str | None:
     """Get device friendly name"""
 
     device_entry = await async_get_device_entry_by_device_id(hass, device_id)
     return device_entry.name_by_user or device_entry.name
 
 
-async def async_get_coordinator(
-    hass: HomeAssistant, device_id: str | None
-) -> BCNNCoordinator:
+async def async_get_coordinator(hass: HomeAssistant, device_id: str | None) -> BCNNCoordinator:
     """Get coordinator for device id via runtime_data."""
     device_entry = await async_get_device_entry_by_device_id(hass, device_id)
     for entry_id in device_entry.config_entries:
@@ -56,9 +52,7 @@ async def async_get_coordinator(
 def get_previous_month() -> date:
     """Get first day of previous month"""
     today = date.today()
-    first_day = (today - timedelta(days=today.day)).replace(
-        day=1
-    )  # first day of previous month
+    first_day = (today - timedelta(days=today.day)).replace(day=1)  # first day of previous month
     return first_day
 
 

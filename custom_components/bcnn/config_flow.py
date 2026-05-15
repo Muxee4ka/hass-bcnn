@@ -20,9 +20,7 @@ class BCNNConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
@@ -91,9 +89,7 @@ class BCNNConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_import(
-        self, import_data: dict[str, Any]
-    ) -> FlowResult:
+    async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
         """Автоматическое создание записей для дополнительных ЛС."""
         account = import_data[CONF_ACCOUNT]
         unique_id = f"{import_data[CONF_LOGIN]}({account})".lower()
@@ -101,9 +97,7 @@ class BCNNConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=unique_id, data=import_data)
 
-    async def async_step_reauth(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_reauth(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Повторная аутентификация при смене пароля."""
         errors: dict[str, str] = {}
         reauth_entry: ConfigEntry = self._get_reauth_entry()

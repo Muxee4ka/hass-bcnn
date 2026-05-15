@@ -42,6 +42,7 @@ HEADERS_JSON = {
 LOGGER = getLogger(__name__)
 REQUEST_TIMEOUT = 30
 
+
 def _read_manifest_version() -> str:
     manifest = Path(__file__).parent / "manifest.json"
     try:
@@ -118,10 +119,7 @@ class BCNNApi:
         return self._session
 
     def session_is_expired(self) -> bool:
-        return not (
-            self.start_session
-            and self.start_session + 1800 > datetime.now().timestamp()
-        )
+        return not (self.start_session and self.start_session + 1800 > datetime.now().timestamp())
 
     def get_accounts(self) -> dict[str, Any]:
         """Возвращает список лицевых счетов из личного кабинета.
@@ -149,7 +147,11 @@ class BCNNApi:
         try:
             payload = response.json()
         except Exception as exc:
-            LOGGER.error("Не удалось разобрать ответ getAccountInfo: %s\nТело ответа: %.500s", exc, response.text)
+            LOGGER.error(
+                "Не удалось разобрать ответ getAccountInfo: %s\nТело ответа: %.500s",
+                exc,
+                response.text,
+            )
             raise BCNNConnectionError(f"Неверный формат ответа getAccountInfo: {exc}") from exc
 
         LOGGER.debug("getAccountInfo ответ: %s", payload)
@@ -220,7 +222,9 @@ class BCNNApi:
             )
             response.raise_for_status()
         except requests.RequestException as exc:
-            raise BCNNConnectionError(f"Ошибка при выборе аккаунта {account_number}: {exc}") from exc
+            raise BCNNConnectionError(
+                f"Ошибка при выборе аккаунта {account_number}: {exc}"
+            ) from exc
 
         soup = BeautifulSoup(response.text, "html.parser")
         self.form_build_id = _require_input(soup, "form_build_id", "select_account")
@@ -458,7 +462,9 @@ class BCNNApi:
 
             for row in batch[1:]:
                 columns = [elem.text.strip() for elem in row.find_all("td")]
-                period.setdefault("services", []).append(dict(zip(column_names, columns, strict=False)))
+                period.setdefault("services", []).append(
+                    dict(zip(column_names, columns, strict=False))
+                )
             data.append(period)
 
         return data

@@ -26,17 +26,12 @@ class BCNNBaseCoordinatorEntity(CoordinatorEntity[BCNNCoordinator]):
     _attr_attribution = ATTRIBUTION
     _attr_has_entity_name = True
 
-    def __init__(
-        self, coordinator: BCNNCoordinator, entity_description: EntityDescription
-    ) -> None:
+    def __init__(self, coordinator: BCNNCoordinator, entity_description: EntityDescription) -> None:
         """Initialize the Entity."""
         super().__init__(coordinator=coordinator)
         self.entity_description = entity_description
 
-        if (
-            CONF_READINGS in self.coordinator.data
-            and len(self.coordinator.data[CONF_READINGS]) > 0
-        ):
+        if CONF_READINGS in self.coordinator.data and len(self.coordinator.data[CONF_READINGS]) > 0:
             _model = self.coordinator.data[CONF_READINGS][0].get(ATTR_MODEL_PU)
         else:
             _model = None

@@ -81,7 +81,10 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     delay = _RETRY_DELAYS[attempt]
                     _LOGGER.warning(
                         "Сетевая ошибка Center-SBK (попытка %d/%d), повтор через %ds: %s",
-                        attempt + 1, _RETRY_ATTEMPTS, delay, error,
+                        attempt + 1,
+                        _RETRY_ATTEMPTS,
+                        delay,
+                        error,
                     )
                     await asyncio.sleep(delay)
             except Exception as error:
@@ -107,6 +110,4 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def async_get_bill(self) -> bytes | None:
-        return await self.hass.async_add_executor_job(
-            partial(self._api.get_bill, self.account)
-        )
+        return await self.hass.async_add_executor_job(partial(self._api.get_bill, self.account))

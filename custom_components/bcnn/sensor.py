@@ -49,17 +49,13 @@ class BCNNEntityDescriptionMixin:
 class BCNNBaseSensorEntityDescription(SensorEntityDescription):
     """Describes Center-SBK sensor entity default overrides."""
 
-    attr_fn: Callable[[dict[str, Any]], dict[str, StateType | datetime | date]] = (
-        lambda _: {}
-    )
+    attr_fn: Callable[[dict[str, Any]], dict[str, StateType | datetime | date]] = lambda _: {}
     avabl_fn: Callable[[dict[str, Any]], bool] = lambda _: True
     icon_fn: Callable[[dict[str, Any]], str | None] = lambda _: None
 
 
 @dataclass(frozen=True, kw_only=True)
-class BCNNSensorEntityDescription(
-    BCNNBaseSensorEntityDescription, BCNNEntityDescriptionMixin
-):
+class BCNNSensorEntityDescription(BCNNBaseSensorEntityDescription, BCNNEntityDescriptionMixin):
     """Describes Center-SBK sensor entity."""
 
 
@@ -179,9 +175,7 @@ class BCNNSensor(BCNNBaseCoordinatorEntity, SensorEntity):
         if self.entity_description.icon_fn is not None:
             self._attr_icon = self.entity_description.icon_fn(data)
 
-        self.coordinator.logger.debug(
-            "Entity ID: %s Value: %s", self.entity_id, self.native_value
-        )
+        self.coordinator.logger.debug("Entity ID: %s Value: %s", self.entity_id, self.native_value)
 
         self.async_write_ha_state()
 
@@ -239,15 +233,12 @@ async def async_setup_entry(
 
     # Warm up transliterate off the event loop so the first call inside
     # entity setup does not perform blocking I/O.
-    await hass.async_add_executor_job(
-        partial(translit, "прогрев", "ru", reversed=True)
-    )
+    await hass.async_add_executor_job(partial(translit, "прогрев", "ru", reversed=True))
 
     coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNSensor] = [
-        BCNNSensor(coordinator, entity_description)
-        for entity_description in SENSOR_TYPES
+        BCNNSensor(coordinator, entity_description) for entity_description in SENSOR_TYPES
     ]
 
     if CONF_READINGS in coordinator.data:
@@ -264,7 +255,9 @@ async def async_setup_entry(
                         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
                         device_class=SensorDeviceClass.WATER,
                         state_class=SensorStateClass.TOTAL,
-                        value_fn=lambda data: _to_float(data.get("cur_value") or data.get("prev_value")),
+                        value_fn=lambda data: _to_float(
+                            data.get("cur_value") or data.get("prev_value")
+                        ),
                         avabl_fn=lambda data: len(data) > 0,
                         attr_fn=lambda data: {
                             "device_number": data.get("device_number"),

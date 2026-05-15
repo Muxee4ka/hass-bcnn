@@ -19,7 +19,9 @@ type BCNNConfigEntry = ConfigEntry[BCNNCoordinator]
 
 async def async_setup_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool:
     """Set up Center-SBK from a config entry."""
-    _LOGGER.debug("async_setup_entry: entry_id=%s account=%s", entry.entry_id, entry.data[CONF_ACCOUNT])
+    _LOGGER.debug(
+        "async_setup_entry: entry_id=%s account=%s", entry.entry_id, entry.data[CONF_ACCOUNT]
+    )
 
     api = BCNNApi(
         login=entry.data[CONF_LOGIN],
