@@ -73,12 +73,7 @@
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Center-SBK device to refresh.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Center-SBK device to refresh."
         }
       }
     },
@@ -88,12 +83,7 @@
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Center-SBK device.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Center-SBK device."
         }
       }
     },
@@ -103,116 +93,43 @@
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Center-SBK device.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Center-SBK device."
         },
         "meter_1": {
           "name": "Meter 1",
-          "description": "Meter sensor of this account.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Meter sensor of this account."
         },
         "meter_1_value": {
           "name": "Meter 1 reading, m³",
-          "description": "New reading value.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "New reading value."
         },
         "meter_2": {
           "name": "Meter 2",
-          "description": "Meter sensor of this account.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Meter sensor of this account."
         },
         "meter_2_value": {
           "name": "Meter 2 reading, m³",
-          "description": "New reading value.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "New reading value."
         },
         "meter_3": {
           "name": "Meter 3",
-          "description": "Meter sensor of this account.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Meter sensor of this account."
         },
         "meter_3_value": {
           "name": "Meter 3 reading, m³",
-          "description": "New reading value.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "New reading value."
         },
         "meter_4": {
           "name": "Meter 4",
-          "description": "Meter sensor of this account.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Meter sensor of this account."
         },
         "meter_4_value": {
           "name": "Meter 4 reading, m³",
-          "description": "New reading value.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "New reading value."
         },
         "readings": {
           "name": "Readings (for automations)",
-          "description": "Alternative to the meter slots — a mapping 'meter number → reading (m³)'. Convenient for automations that pull values from other integrations. Jinja templates are supported (see README for examples).",
-          "example": "{\"12345678\": 105.123, \"87654321\": 50.500}",
-          "selector": {
-            "object": {}
-          }
+          "description": "Alternative to the meter slots — a mapping 'meter number → reading (m³)'. Convenient for automations that pull values from other integrations. Jinja templates are supported (see README for examples)."
         }
       }
     }

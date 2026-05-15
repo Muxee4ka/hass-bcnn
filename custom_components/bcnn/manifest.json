@@ -15,6 +15,5 @@
     "dependencies": [],
     "after_dependencies": [],
     "iot_class": "cloud_polling",
-    "integration_type": "hub",
-    "is_built_in": false
+    "integration_type": "hub"
 }

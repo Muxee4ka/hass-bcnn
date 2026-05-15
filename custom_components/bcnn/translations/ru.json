@@ -80,12 +80,7 @@
       "fields": {
         "device_id": {
           "name": "Лицевой счёт",
-          "description": "Устройство Центр-СБК.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Устройство Центр-СБК."
         }
       }
     },
@@ -95,12 +90,7 @@
       "fields": {
         "device_id": {
           "name": "Лицевой счёт",
-          "description": "Устройство Центр-СБК.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Устройство Центр-СБК."
         }
       }
     },
@@ -110,116 +100,43 @@
       "fields": {
         "device_id": {
           "name": "Лицевой счёт",
-          "description": "Устройство Центр-СБК.",
-          "selector": {
-            "device": {
-              "integration": "bcnn"
-            }
-          }
+          "description": "Устройство Центр-СБК."
         },
         "meter_1": {
           "name": "Счётчик 1",
-          "description": "Сенсор счётчика этого ЛС.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Сенсор счётчика этого ЛС."
         },
         "meter_1_value": {
           "name": "Показание счётчика 1, м³",
-          "description": "Новое показание.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "Новое показание."
         },
         "meter_2": {
           "name": "Счётчик 2",
-          "description": "Сенсор счётчика этого ЛС.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Сенсор счётчика этого ЛС."
         },
         "meter_2_value": {
           "name": "Показание счётчика 2, м³",
-          "description": "Новое показание.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "Новое показание."
         },
         "meter_3": {
           "name": "Счётчик 3",
-          "description": "Сенсор счётчика этого ЛС.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Сенсор счётчика этого ЛС."
         },
         "meter_3_value": {
           "name": "Показание счётчика 3, м³",
-          "description": "Новое показание.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "Новое показание."
         },
         "meter_4": {
           "name": "Счётчик 4",
-          "description": "Сенсор счётчика этого ЛС.",
-          "selector": {
-            "entity": {
-              "integration": "bcnn",
-              "domain": "sensor",
-              "device_class": "water"
-            }
-          }
+          "description": "Сенсор счётчика этого ЛС."
         },
         "meter_4_value": {
           "name": "Показание счётчика 4, м³",
-          "description": "Новое показание.",
-          "selector": {
-            "number": {
-              "min": 0,
-              "max": 99999,
-              "step": 0.001,
-              "unit_of_measurement": "m³",
-              "mode": "box"
-            }
-          }
+          "description": "Новое показание."
         },
         "readings": {
           "name": "Показания (для автоматизаций)",
-          "description": "Альтернатива слотам — словарь «номер счётчика → показание (м³)». Удобно для автоматизаций со значениями из других интеграций. Поддерживаются шаблоны Jinja (примеры в README).",
-          "example": "{\"12345678\": 105.123, \"87654321\": 50.500}",
-          "selector": {
-            "object": {}
-          }
+          "description": "Альтернатива слотам — словарь «номер счётчика → показание (м³)». Удобно для автоматизаций со значениями из других интеграций. Поддерживаются шаблоны Jinja (примеры в README)."
         }
       }
     }
