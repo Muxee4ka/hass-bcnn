@@ -258,7 +258,7 @@ async def async_setup_entry(
                         value_fn=lambda data: _to_float(
                             data.get("cur_value") or data.get("prev_value")
                         ),
-                        avabl_fn=lambda data: len(data) > 0,
+                        avabl_fn=lambda data: bool(data),
                         attr_fn=lambda data: {
                             "device_number": data.get("device_number"),
                             "Услуга": data.get("device_type"),

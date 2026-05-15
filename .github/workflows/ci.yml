@@ -32,7 +32,7 @@ jobs:
         run: ruff format --check custom_components
 
   test:
-    name: Unit tests
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,8 +44,10 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install test dependencies
-        run: pip install pytest beautifulsoup4 lxml requests voluptuous
+      - name: Install dependencies
+        run: |
+          pip install pytest-homeassistant-custom-component
+          pip install transliterate beautifulsoup4 lxml requests
 
       - name: pytest
         run: pytest tests/
