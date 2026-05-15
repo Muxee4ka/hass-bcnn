@@ -6,9 +6,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from homeassistant.components.button import (
-    ButtonEntityDescription,
-    ButtonEntity,
     ENTITY_ID_FORMAT,
+    ButtonEntity,
+    ButtonEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_DEVICE_ID
@@ -20,7 +20,7 @@ from homeassistant.util import slugify
 from .const import DOMAIN
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
-from .services import SERVICE_REFRESH, SERVICE_GET_BILL, SERVICE_SEND_READINGS
+from .services import SERVICE_GET_BILL, SERVICE_REFRESH, SERVICE_SEND_READINGS
 
 
 @dataclass

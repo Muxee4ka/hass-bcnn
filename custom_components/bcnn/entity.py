@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from custom_components.bcnn.bcnn_api import BCNNApi
 from homeassistant.helpers.entity import DeviceInfo, EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
+from custom_components.bcnn.bcnn_api import BCNNApi
+
 from .const import (
-    DOMAIN,
-    ATTRIBUTION,
-    CONFIGURATION_URL,
-    CONF_READINGS,
-    MANUFACTURER,
-    DEVICE_NAME_FORMAT,
     ATTR_MODEL_PU,
+    ATTRIBUTION,
+    CONF_READINGS,
+    CONFIGURATION_URL,
+    DEVICE_NAME_FORMAT,
+    DOMAIN,
+    MANUFACTURER,
 )
 from .coordinator import BCNNCoordinator
 

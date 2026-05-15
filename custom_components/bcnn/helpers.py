@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from datetime import date, datetime, timedelta
-from typing import Any
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr

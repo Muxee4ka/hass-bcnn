@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from itertools import islice
+import json
 from logging import getLogger
 from pathlib import Path
 from pprint import pformat
+import re
 from typing import Any, Final
 
-import requests
 from bs4 import BeautifulSoup
+import requests
 from requests import Response, Session
 
 from custom_components.bcnn.exceptions import (
@@ -118,9 +118,10 @@ class BCNNApi:
         return self._session
 
     def session_is_expired(self) -> bool:
-        if self.start_session and self.start_session + 1800 > datetime.now().timestamp():
-            return False
-        return True
+        return not (
+            self.start_session
+            and self.start_session + 1800 > datetime.now().timestamp()
+        )
 
     def get_accounts(self) -> dict[str, Any]:
         """Возвращает список лицевых счетов из личного кабинета.
@@ -446,7 +447,7 @@ class BCNNApi:
         for batch in batched(data_rows, max(1, count_rows // 3)):
             period: dict[str, Any] = {}
             first_row = [elem.text.strip() for elem in batch[0].find_all("td")]
-            current_period = dict(zip(column_names, first_row))
+            current_period = dict(zip(column_names, first_row, strict=False))
             period_col = next(
                 (k for k, v in current_period.items() if convert_period_to_date(v) != date.today()),
                 None,
@@ -457,7 +458,7 @@ class BCNNApi:
 
             for row in batch[1:]:
                 columns = [elem.text.strip() for elem in row.find_all("td")]
-                period.setdefault("services", []).append(dict(zip(column_names, columns)))
+                period.setdefault("services", []).append(dict(zip(column_names, columns, strict=False)))
             data.append(period)
 
         return data

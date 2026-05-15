@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 import logging
 import os
-from collections.abc import Callable, Awaitable
-from dataclasses import dataclass
 from typing import Any
 
-import voluptuous as vol
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_DEVICE_ID, CONF_URL, ATTR_DATE, CONF_ERROR
+from homeassistant.const import ATTR_DATE, ATTR_DEVICE_ID, CONF_ERROR, CONF_URL
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, entity_registry as er
+import voluptuous as vol
 
 from .const import ATTR_DEVICE_NUMBER, ATTR_READINGS, CONF_READINGS, DOMAIN, METER_SLOTS
 from .coordinator import BCNNCoordinator

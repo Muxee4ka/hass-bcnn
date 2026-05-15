@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
+from functools import partial
+import logging
 from typing import Any
-from transliterate import translit
-
-# Warm up transliterate at import time so it doesn't do blocking I/O
-# (os.listdir / import_module) inside the HA event loop on first call.
-translit("прогрев", "ru", reversed=True)
 
 from homeassistant.components.sensor import (
+    ENTITY_ID_FORMAT,
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorDeviceClass,
     SensorStateClass,
-    ENTITY_ID_FORMAT,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfVolume
@@ -26,17 +22,18 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from transliterate import translit
 
 from .const import (
+    ATTR_LAST_UPDATE_TIME,
+    CONF_ACCOUNT,
     CONF_INFO,
     CONF_PAYMENT,
     CONF_READINGS,
-    CONF_ACCOUNT,
-    ATTR_LAST_UPDATE_TIME,
 )
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
-from .helpers import _to_str, _to_float
+from .helpers import _to_float, _to_str
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -239,6 +236,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up a config entry."""
+
+    # Warm up transliterate off the event loop so the first call inside
+    # entity setup does not perform blocking I/O.
+    await hass.async_add_executor_job(
+        partial(translit, "прогрев", "ru", reversed=True)
+    )
 
     coordinator: BCNNCoordinator = entry.runtime_data
 

@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .bcnn_api import BCNNApi
-from .const import DOMAIN, PLATFORMS, CONF_LOGIN, CONF_PASSWORD, CONF_ACCOUNT
+from .const import CONF_ACCOUNT, CONF_LOGIN, CONF_PASSWORD, PLATFORMS
 from .coordinator import BCNNCoordinator
 from .services import async_setup_services, async_unload_services
 
