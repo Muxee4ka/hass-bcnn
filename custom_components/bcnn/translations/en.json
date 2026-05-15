@@ -60,6 +60,9 @@
       },
       "get_bill": {
         "name": "Get bill"
+      },
+      "send_readings": {
+        "name": "Send readings"
       }
     }
   },
@@ -85,44 +88,121 @@
       }
     },
     "send_readings": {
-      "name": "Send Readings",
-      "description": "Send readings to the SBK Center",
+      "name": "Send readings",
+      "description": "Submit water meter readings to Center-SBK. Selected meters must belong to the chosen account, otherwise the service will return an error. If neither meter slots nor the 'Readings' field are filled, values are taken from the meter number entities of this account.",
       "fields": {
         "device_id": {
-          "name": "Account Number",
-          "description": "Select the SBK Center account number"
+          "name": "Account",
+          "description": "Select the Center-SBK account.",
+          "selector": {
+            "device": {
+              "integration": "bcnn"
+            }
+          }
         },
-        "cw1": {
-          "name": "Cold Water Meter #1",
-          "description": "Cold Water Meter #1"
+        "meter_1": {
+          "name": "Meter 1",
+          "description": "Meter sensor of this account.",
+          "selector": {
+            "entity": {
+              "integration": "bcnn",
+              "domain": "sensor",
+              "device_class": "water"
+            }
+          }
         },
-        "cw1val": {
-          "name": "Cold Water Meter #1 Readings, m³",
-          "description": "Cold Water Meter #1 Readings, m³"
+        "meter_1_value": {
+          "name": "Meter 1 reading, m³",
+          "description": "New reading value.",
+          "selector": {
+            "number": {
+              "min": 0,
+              "max": 99999,
+              "step": 0.001,
+              "unit_of_measurement": "m³",
+              "mode": "box"
+            }
+          }
         },
-        "cw2": {
-          "name": "Cold Water Meter #2",
-          "description": "Cold Water Meter #2"
+        "meter_2": {
+          "name": "Meter 2",
+          "description": "Meter sensor of this account.",
+          "selector": {
+            "entity": {
+              "integration": "bcnn",
+              "domain": "sensor",
+              "device_class": "water"
+            }
+          }
         },
-        "cw2val": {
-          "name": "Cold Water Meter #2 Readings, m³",
-          "description": "Cold Water Meter #2 Readings, m³"
+        "meter_2_value": {
+          "name": "Meter 2 reading, m³",
+          "description": "New reading value.",
+          "selector": {
+            "number": {
+              "min": 0,
+              "max": 99999,
+              "step": 0.001,
+              "unit_of_measurement": "m³",
+              "mode": "box"
+            }
+          }
         },
-        "hw1": {
-          "name": "Hot Water Meter #1",
-          "description": "Hot Water Meter #1"
+        "meter_3": {
+          "name": "Meter 3",
+          "description": "Meter sensor of this account.",
+          "selector": {
+            "entity": {
+              "integration": "bcnn",
+              "domain": "sensor",
+              "device_class": "water"
+            }
+          }
         },
-        "hw1val": {
-          "name": "Hot Water Meter #1 Readings, m³",
-          "description": "Hot Water Meter #1 Readings, m³"
+        "meter_3_value": {
+          "name": "Meter 3 reading, m³",
+          "description": "New reading value.",
+          "selector": {
+            "number": {
+              "min": 0,
+              "max": 99999,
+              "step": 0.001,
+              "unit_of_measurement": "m³",
+              "mode": "box"
+            }
+          }
         },
-        "hw2": {
-          "name": "Hot Water Meter #2",
-          "description": "Hot Water Meter #2"
+        "meter_4": {
+          "name": "Meter 4",
+          "description": "Meter sensor of this account.",
+          "selector": {
+            "entity": {
+              "integration": "bcnn",
+              "domain": "sensor",
+              "device_class": "water"
+            }
+          }
         },
-        "hw2val": {
-          "name": "Hot Water Meter #2 Readings, m³",
-          "description": "Hot Water Meter #2 Readings, m³"
+        "meter_4_value": {
+          "name": "Meter 4 reading, m³",
+          "description": "New reading value.",
+          "selector": {
+            "number": {
+              "min": 0,
+              "max": 99999,
+              "step": 0.001,
+              "unit_of_measurement": "m³",
+              "mode": "box"
+            }
+          }
+        },
+        "readings": {
+          "name": "Readings (for automations)",
+          "description": "Alternative to the meter slots — a mapping 'meter number → reading (m³)'. Convenient for automations that pull values from other integrations. Jinja templates are supported (see README for examples).",
+          "example": "{\"12345678\": 105.123, \"87654321\": 50.500}",
+          "selector": {
+            "object": {}
+          }
         }
       }
     }

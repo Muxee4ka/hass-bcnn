@@ -99,7 +99,7 @@
     },
     "send_readings": {
       "name": "Send readings",
-      "description": "Submit water meter readings to Center-SBK. Leave meter fields empty to re-send current readings from coordinator cache.",
+      "description": "Submit water meter readings to Center-SBK. Selected meters must belong to the chosen account, otherwise the service will return an error. If neither meter slots nor the 'Readings' field are filled, values are taken from the meter number entities of this account.",
       "fields": {
         "device_id": {
           "name": "Account",
@@ -112,7 +112,7 @@
         },
         "meter_1": {
           "name": "Meter 1",
-          "description": "Select meter sensor.",
+          "description": "Meter sensor of this account.",
           "selector": {
             "entity": {
               "integration": "bcnn",
@@ -136,7 +136,7 @@
         },
         "meter_2": {
           "name": "Meter 2",
-          "description": "Select meter sensor.",
+          "description": "Meter sensor of this account.",
           "selector": {
             "entity": {
               "integration": "bcnn",
@@ -160,7 +160,7 @@
         },
         "meter_3": {
           "name": "Meter 3",
-          "description": "Select meter sensor.",
+          "description": "Meter sensor of this account.",
           "selector": {
             "entity": {
               "integration": "bcnn",
@@ -184,7 +184,7 @@
         },
         "meter_4": {
           "name": "Meter 4",
-          "description": "Select meter sensor.",
+          "description": "Meter sensor of this account.",
           "selector": {
             "entity": {
               "integration": "bcnn",
@@ -204,6 +204,14 @@
               "unit_of_measurement": "m³",
               "mode": "box"
             }
+          }
+        },
+        "readings": {
+          "name": "Readings (for automations)",
+          "description": "Alternative to the meter slots — a mapping 'meter number → reading (m³)'. Convenient for automations that pull values from other integrations. Jinja templates are supported (see README for examples).",
+          "example": "{\"12345678\": 105.123, \"87654321\": 50.500}",
+          "selector": {
+            "object": {}
           }
         }
       }

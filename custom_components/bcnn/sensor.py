@@ -163,6 +163,11 @@ class BCNNSensor(BCNNBaseCoordinatorEntity, SensorEntity):
             and self.entity_description.avabl_fn(self._get_data())
         )
 
+    async def async_added_to_hass(self) -> None:
+        """Populate state from coordinator data already fetched at setup."""
+        await super().async_added_to_hass()
+        self._handle_coordinator_update()
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

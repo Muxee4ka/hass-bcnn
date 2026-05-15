@@ -10,7 +10,7 @@ ATTRIBUTION: Final = "Данные получены от Центр-СБК"
 DOMAIN: Final = "bcnn"
 MANUFACTURER: Final = "Центр-СБК"
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON, Platform.NUMBER]
 
 CONF_LOGIN: Final = "login"
 CONF_PASSWORD: Final = "password"
@@ -24,6 +24,7 @@ DEVICE_NAME_FORMAT: Final = "ЛC №{}"
 ATTR_MODEL_PU: Final = "ModelPU"
 
 ATTR_READINGS: Final = "readings"
+ATTR_DEVICE_NUMBER: Final = "device_number"
 METER_SLOTS: Final = 4
 
 CONFIGURATION_URL: Final = "https://lk.bcnn.ru/"

@@ -9,13 +9,14 @@ from dataclasses import dataclass
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_DEVICE_ID, CONF_URL, ATTR_DATE, CONF_ERROR
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 
-from .const import DOMAIN, ATTR_READINGS, METER_SLOTS
+from .const import ATTR_DEVICE_NUMBER, ATTR_READINGS, CONF_READINGS, DOMAIN, METER_SLOTS
 from .coordinator import BCNNCoordinator
 from .helpers import async_get_coordinator, get_previous_month
 
@@ -32,6 +33,7 @@ SERVICE_REFRESH_SCHEMA = vol.Schema({**SERVICE_BASE_SCHEMA})
 SERVICE_SEND_READINGS_SCHEMA = vol.Schema(
     {
         **SERVICE_BASE_SCHEMA,
+        vol.Optional(ATTR_READINGS): vol.Schema({cv.string: vol.Coerce(float)}),
         **{
             key: validator
             for i in range(1, METER_SLOTS + 1)
@@ -62,25 +64,103 @@ async def _async_handle_refresh(
     return {}
 
 
-async def _async_handle_send_readings(
-    hass: HomeAssistant, service_call: ServiceCall, coordinator: BCNNCoordinator
-) -> dict[str, Any]:
+def _collect_readings_from_numbers(
+    hass: HomeAssistant, device_id: str, valid_numbers: set[str]
+) -> dict[str, str]:
+    """Read current values from this ЛС's number entities."""
+    registry = er.async_get(hass)
     readings: dict[str, str] = {}
+    for entry in er.async_entries_for_device(registry, device_id):
+        if entry.domain != NUMBER_DOMAIN or entry.platform != DOMAIN:
+            continue
+        state = hass.states.get(entry.entity_id)
+        if state is None:
+            continue
+        device_number = state.attributes.get(ATTR_DEVICE_NUMBER)
+        if device_number is None or device_number not in valid_numbers:
+            continue
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            _LOGGER.warning(
+                "send_readings: значение %s в %s не приводится к числу",
+                state.state, entry.entity_id,
+            )
+            continue
+        readings[device_number] = str(value)
+    return readings
 
+
+def _collect_readings_from_slots(
+    hass: HomeAssistant, service_call: ServiceCall, valid_numbers: set[str], account: str
+) -> dict[str, str]:
+    """Read meter_N + meter_N_value pairs, validating ownership of the meter."""
+    readings: dict[str, str] = {}
     for i in range(1, METER_SLOTS + 1):
         entity_id = service_call.data.get(f"meter_{i}")
         value = service_call.data.get(f"meter_{i}_value")
-        if entity_id is None or value is None:
+        if entity_id is None and value is None:
             continue
+        if entity_id is None or value is None:
+            raise HomeAssistantError(
+                f"send_readings: слот #{i} заполнен частично — "
+                "укажите и счётчик, и значение."
+            )
         state = hass.states.get(entity_id)
         if state is None:
-            _LOGGER.warning("send_readings: сенсор %s не найден", entity_id)
-            continue
-        device_number = state.attributes.get("device_number")
+            raise HomeAssistantError(
+                f"send_readings: сенсор {entity_id} не найден."
+            )
+        device_number = state.attributes.get(ATTR_DEVICE_NUMBER)
         if device_number is None:
-            _LOGGER.warning("send_readings: у сенсора %s нет атрибута device_number", entity_id)
-            continue
+            raise HomeAssistantError(
+                f"send_readings: у сенсора {entity_id} нет атрибута device_number."
+            )
+        if device_number not in valid_numbers:
+            raise HomeAssistantError(
+                f"send_readings: счётчик {entity_id} (№{device_number}) "
+                f"не относится к ЛС {account}."
+            )
         readings[device_number] = str(float(value))
+    return readings
+
+
+async def _async_handle_send_readings(
+    hass: HomeAssistant, service_call: ServiceCall, coordinator: BCNNCoordinator
+) -> dict[str, Any]:
+    valid_numbers = {
+        m.get("device_number")
+        for m in (coordinator.data.get(CONF_READINGS) or [])
+        if m.get("device_number")
+    }
+    if not valid_numbers:
+        raise HomeAssistantError(
+            f"{service_call.service}: нет известных счётчиков — сначала обновите данные."
+        )
+
+    provided = service_call.data.get(ATTR_READINGS)
+    slot_readings = _collect_readings_from_slots(
+        hass, service_call, valid_numbers, coordinator.account
+    )
+
+    if provided:
+        unknown = set(provided) - valid_numbers
+        if unknown:
+            raise HomeAssistantError(
+                f"{service_call.service}: счётчики {sorted(unknown)} не относятся к ЛС {coordinator.account}."
+            )
+        readings = {device_number: str(float(v)) for device_number, v in provided.items()}
+        readings.update(slot_readings)
+    elif slot_readings:
+        readings = slot_readings
+    else:
+        device_id = service_call.data[ATTR_DEVICE_ID]
+        readings = _collect_readings_from_numbers(hass, device_id, valid_numbers)
+        if not readings:
+            raise HomeAssistantError(
+                f"{service_call.service}: не задано ни одного значения "
+                "(выберите счётчики, передайте readings или заполните number-сущности)."
+            )
 
     _LOGGER.debug("send_readings: передаём показания %s", readings)
     result = await coordinator.async_send_readings(tuple(readings.items()))
