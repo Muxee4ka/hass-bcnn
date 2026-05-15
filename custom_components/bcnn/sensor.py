@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
-from functools import partial
 import logging
 from typing import Any
 
@@ -230,11 +229,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up a config entry."""
-
-    # Warm up transliterate off the event loop so the first call inside
-    # entity setup does not perform blocking I/O.
-    await hass.async_add_executor_job(partial(translit, "прогрев", "ru", reversed=True))
-
     coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNSensor] = [

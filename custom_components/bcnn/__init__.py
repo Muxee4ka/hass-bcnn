@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from functools import partial
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from transliterate import translit
 
 from .bcnn_api import BCNNApi
 from .const import CONF_ACCOUNT, CONF_LOGIN, CONF_PASSWORD, PLATFORMS
@@ -31,6 +33,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
+
+    # Warm up transliterate off the event loop before any platform that needs
+    # it (sensor / number / button) gets set up. The first call inside the
+    # library does blocking os.listdir + import_module.
+    await hass.async_add_executor_job(partial(translit, "прогрев", "ru", reversed=True))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
