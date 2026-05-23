@@ -38,7 +38,10 @@ MOCK_READINGS = [
     },
 ]
 
-MOCK_ADDRESS = {"data": {"address": "ул. Тестовая, д. 1, кв. 1"}}
+MOCK_ADDRESS = {
+    "data": {"address": "ул. Тестовая, д. 1, кв. 1", "els": "80AB123456"},
+    "code": 0,
+}
 
 MOCK_PAYMENT = {
     "period": date(2026, 4, 1),

@@ -51,6 +51,15 @@
       "balance": {
         "name": "Задолженность"
       },
+      "opening_balance": {
+        "name": "Входящее сальдо"
+      },
+      "accrued": {
+        "name": "Начислено"
+      },
+      "paid": {
+        "name": "Оплачено"
+      },
       "meter": {
         "name": "Счетчик"
       },
@@ -59,6 +68,11 @@
       },
       "current_timestamp": {
         "name": "Последнее обновление"
+      }
+    },
+    "binary_sensor": {
+      "has_debt": {
+        "name": "Есть задолженность"
       }
     },
     "button": {

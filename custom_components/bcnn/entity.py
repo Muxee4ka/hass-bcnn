@@ -11,6 +11,7 @@ from custom_components.bcnn.bcnn_api import BCNNApi
 from .const import (
     ATTR_MODEL_PU,
     ATTRIBUTION,
+    CONF_INFO,
     CONF_READINGS,
     CONFIGURATION_URL,
     DEVICE_NAME_FORMAT,
@@ -36,11 +37,15 @@ class BCNNBaseCoordinatorEntity(CoordinatorEntity[BCNNCoordinator]):
         else:
             _model = None
 
+        _info_data = (self.coordinator.data.get(CONF_INFO) or {}).get("data") or {}
+        _els = _info_data.get("els")
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.account)},
             manufacturer=MANUFACTURER,
             model=_model,
             name=DEVICE_NAME_FORMAT.format(coordinator.account),
+            serial_number=_els,
             sw_version=BCNNApi.VERSION,
             configuration_url=CONFIGURATION_URL,
         )

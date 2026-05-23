@@ -10,7 +10,12 @@ ATTRIBUTION: Final = "Данные получены от Центр-СБК"
 DOMAIN: Final = "bcnn"
 MANUFACTURER: Final = "Центр-СБК"
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON, Platform.NUMBER]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.NUMBER,
+    Platform.BINARY_SENSOR,
+]
 
 CONF_LOGIN: Final = "login"
 CONF_PASSWORD: Final = "password"

@@ -44,6 +44,15 @@
       "balance": {
         "name": "Balance"
       },
+      "opening_balance": {
+        "name": "Opening balance"
+      },
+      "accrued": {
+        "name": "Accrued"
+      },
+      "paid": {
+        "name": "Paid"
+      },
       "meter": {
         "name": "Meter"
       },
@@ -52,6 +61,11 @@
       },
       "current_timestamp": {
         "name": "Last update"
+      }
+    },
+    "binary_sensor": {
+      "has_debt": {
+        "name": "Has debt"
       }
     },
     "button": {

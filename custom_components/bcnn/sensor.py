@@ -112,6 +112,33 @@ SENSOR_TYPES: tuple[BCNNSensorEntityDescription, ...] = (
         translation_key="balance",
     ),
     BCNNSensorEntityDescription(
+        key="opening_balance",
+        name="Входящее сальдо",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("opening_balance")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="opening_balance",
+    ),
+    BCNNSensorEntityDescription(
+        key="accrued",
+        name="Начислено",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("accrued")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="accrued",
+    ),
+    BCNNSensorEntityDescription(
+        key="paid",
+        name="Оплачено",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("paid")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="paid",
+    ),
+    BCNNSensorEntityDescription(
         key="current_timestamp",
         name="Последнее обновление",
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -240,12 +267,14 @@ async def async_setup_entry(
             _LOGGER.debug(meter)
             device_number = meter.get("device_number")
             _type = meter.get("device_type")
+            slug = _get_meter_slug(_type, device_number)
+            name = _get_meter_name(_type, device_number)
             entities.append(
                 BCNNMeterSensor(
                     coordinator,
                     BCNNSensorEntityDescription(
-                        key=_get_meter_slug(_type, device_number),
-                        name=_get_meter_name(_type, device_number),
+                        key=slug,
+                        name=name,
                         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
                         device_class=SensorDeviceClass.WATER,
                         state_class=SensorStateClass.TOTAL,
@@ -261,6 +290,23 @@ async def async_setup_entry(
                             "Текущие показания": data.get("cur_value"),
                             "Количество потреблённого ресурса": data.get("amount_water"),
                         },
+                    ),
+                    device_number,
+                    _type,
+                )
+            )
+            entities.append(
+                BCNNMeterSensor(
+                    coordinator,
+                    BCNNSensorEntityDescription(
+                        key=f"{slug}_amount",
+                        name=f"{name} — потребление",
+                        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+                        device_class=SensorDeviceClass.WATER,
+                        state_class=SensorStateClass.TOTAL_INCREASING,
+                        value_fn=lambda data: _to_float(data.get("amount_water")),
+                        avabl_fn=lambda data: bool(data) and bool(data.get("amount_water")),
+                        attr_fn=lambda data: {"device_number": data.get("device_number")},
                     ),
                     device_number,
                     _type,
