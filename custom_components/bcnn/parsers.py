@@ -5,7 +5,7 @@ Kept separate so it can be unit-tested without spinning up HA.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 import re
 
 MONTHS: dict[str, int] = {
@@ -47,21 +47,34 @@ def convert_period_to_date(period_str: str) -> date:
     return date(year, month_num, 1)
 
 
-_DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%d.%m.%y")
+_VERIFICATION_RE = re.compile(r"^\s*(\d{1,2})\s*/\s*(\d{2,4})\s*$")
 
 
-def parse_readings_date(value: str | None) -> date | None:
-    """Parse the 'last reading' date from the readings table cell.
+def parse_verification_date(value: str | None) -> date | None:
+    """Parse the meter verification due-date cell ('MM/YY' or 'MM/YYYY').
 
-    Real cabinets serve 'DD.MM.YYYY'; tolerate a few more formats so we
-    don't blow up if the rendering changes slightly.
+    Real cabinets render this as 'MM/YY' (e.g. '09/28', '12/31'). The
+    cabinet table column is the meter's calibration-expiry month. We
+    return the first day of that month for a friendly DATE sensor.
+
+    Returns None for empty / unparseable input.
     """
     if not value:
         return None
-    value = value.strip()
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-    return None
+    match = _VERIFICATION_RE.match(value)
+    if not match:
+        return None
+    month_s, year_s = match.groups()
+    try:
+        month = int(month_s)
+        year = int(year_s)
+    except ValueError:
+        return None
+    if not 1 <= month <= 12:
+        return None
+    if year < 100:
+        year += 2000
+    try:
+        return date(year, month, 1)
+    except ValueError:
+        return None

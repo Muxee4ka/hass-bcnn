@@ -56,8 +56,8 @@
       "meter": {
         "name": "Meter"
       },
-      "readings_date": {
-        "name": "Readings date"
+      "verification_date": {
+        "name": "Verification due"
       },
       "current_timestamp": {
         "name": "Last update"

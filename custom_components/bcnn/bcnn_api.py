@@ -295,10 +295,14 @@ class BCNNApi:
 
             device_type = columns[0].text.strip()
             device_number = columns[1].text.strip()
-            readings_date = columns[2].text.strip()
+            # columns[2] is the meter's verification due date — 'MM/YY' in
+            # real cabinets, e.g. '09/28' (calibration expires Sept 2028).
+            verification_date_raw = columns[2].text.strip()
             prev_value = columns[3].text.strip()
             cur_value = columns[4].text.strip()
-            amount_water = columns[5].text.strip()
+            # Real cabinets only have 6 columns; older versions had a 7th
+            # 'amount' column. Fall back gracefully if it's not there.
+            amount_water = columns[5].text.strip() if len(columns) > 5 else ""
 
             input_tag = row.find("input", {"name": re.compile(".+")})
             repr_number = input_tag["name"] if input_tag else None
@@ -319,7 +323,7 @@ class BCNNApi:
                 {
                     "device_type": device_type,
                     "device_number": device_number,
-                    "readings_date": readings_date,
+                    "verification_date_raw": verification_date_raw,
                     "prev_value": prev_value,
                     "cur_value": cur_value,
                     "amount_water": amount_water,

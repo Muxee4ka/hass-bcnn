@@ -23,7 +23,7 @@ MOCK_READINGS = [
     {
         "device_type": "Холодная вода",
         "device_number": "12345678",
-        "readings_date": "25.04.2026",
+        "verification_date_raw": "09/28",
         "prev_value": "100.000",
         "cur_value": "105.123",
         "amount_water": "5.123",
@@ -33,7 +33,7 @@ MOCK_READINGS = [
     {
         "device_type": "Горячая вода",
         "device_number": "87654321",
-        "readings_date": "25.04.2026",
+        "verification_date_raw": "09/28",
         "prev_value": "50.000",
         "cur_value": "53.750",
         "amount_water": "3.750",

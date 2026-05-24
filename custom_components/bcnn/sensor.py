@@ -33,7 +33,7 @@ from .const import (
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
 from .helpers import _to_float, _to_str
-from .parsers import parse_readings_date
+from .parsers import parse_verification_date
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -317,14 +317,19 @@ async def async_setup_entry(
                 BCNNMeterSensor(
                     coordinator,
                     BCNNSensorEntityDescription(
-                        key=f"{slug}_readings_date",
-                        name=f"{name} — дата показаний",
+                        key=f"{slug}_verification_date",
+                        name=f"{name} — срок поверки",
                         device_class=SensorDeviceClass.DATE,
                         entity_category=EntityCategory.DIAGNOSTIC,
-                        value_fn=lambda data: parse_readings_date(data.get("readings_date")),
+                        value_fn=lambda data: parse_verification_date(
+                            data.get("verification_date_raw")
+                        ),
                         avabl_fn=lambda data: bool(data)
-                        and parse_readings_date(data.get("readings_date")) is not None,
-                        attr_fn=lambda data: {"device_number": data.get("device_number")},
+                        and parse_verification_date(data.get("verification_date_raw")) is not None,
+                        attr_fn=lambda data: {
+                            "device_number": data.get("device_number"),
+                            "raw": data.get("verification_date_raw"),
+                        },
                     ),
                     device_number,
                     _type,

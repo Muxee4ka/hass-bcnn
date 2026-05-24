@@ -187,10 +187,14 @@ async def test_els_is_exposed_as_serial_number(
     assert device.serial_number == "80AB123456"
 
 
-async def test_readings_date_sensor(
+async def test_verification_date_sensor(
     hass: HomeAssistant, auto_enable_custom_integrations, mock_api, mock_config_entry
 ) -> None:
-    """A '<meter> — дата показаний' DATE sensor is created per meter."""
+    """A '<meter> — срок поверки' DATE sensor is created per meter.
+
+    The cabinet renders verification due dates as 'MM/YY' in columns[2];
+    we surface them as a DATE sensor pointing at the 1st of that month.
+    """
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -199,11 +203,15 @@ async def test_readings_date_sensor(
     date_sensors = [
         e
         for e in registry.entities.values()
-        if e.platform == DOMAIN and e.domain == "sensor" and e.unique_id.endswith("_readings_date")
+        if e.platform == DOMAIN
+        and e.domain == "sensor"
+        and e.unique_id.endswith("_verification_date")
     ]
     assert len(date_sensors) == 2
     cold = next(e for e in date_sensors if "12345678" in e.unique_id)
-    assert hass.states.get(cold.entity_id).state == "2026-04-25"
+    state = hass.states.get(cold.entity_id)
+    assert state.state == "2028-09-01"
+    assert state.attributes["raw"] == "09/28"
 
 
 async def test_number_step_from_meter_formatter(
@@ -231,7 +239,7 @@ async def test_number_step_for_four_digit_formatter(
         {
             "device_type": "ХВС",
             "device_number": "12345678",
-            "readings_date": "25.04.2026",
+            "verification_date_raw": "09/30",
             "prev_value": "00100.0000",
             "cur_value": "00105.1234",
             "amount_water": "5.1234",

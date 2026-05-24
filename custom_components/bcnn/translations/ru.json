@@ -63,8 +63,8 @@
       "meter": {
         "name": "Счетчик"
       },
-      "readings_date": {
-        "name": "Дата передачи показаний"
+      "verification_date": {
+        "name": "Срок поверки"
       },
       "current_timestamp": {
         "name": "Последнее обновление"
