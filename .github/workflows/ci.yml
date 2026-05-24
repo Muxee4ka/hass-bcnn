@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pytest-homeassistant-custom-component
-          pip install transliterate beautifulsoup4 lxml requests
+          pip install transliterate beautifulsoup4 lxml aioresponses
 
       - name: pytest
         run: pytest tests/
