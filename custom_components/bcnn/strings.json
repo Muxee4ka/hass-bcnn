@@ -82,22 +82,22 @@
   },
   "services": {
     "refresh": {
-      "name": "Update Information.",
-      "description": "Update personal account information of Center SBK",
+      "name": "Refresh",
+      "description": "Refresh Center-SBK account data.",
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Select the account of Center SBK"
+          "description": "Center-SBK device to refresh."
         }
       }
     },
     "get_bill": {
-      "name": "Get the bill.",
-      "description": "Receive an invoice from Center SBK",
+      "name": "Get bill",
+      "description": "Download the current bill PDF from Center-SBK.",
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Select the account of Center SBK"
+          "description": "Center-SBK device."
         }
       }
     },
@@ -107,7 +107,7 @@
       "fields": {
         "device_id": {
           "name": "Account",
-          "description": "Select the Center-SBK account."
+          "description": "Center-SBK device."
         },
         "meter_1": {
           "name": "Meter 1",

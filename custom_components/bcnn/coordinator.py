@@ -4,47 +4,44 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import (
+    REQUEST_REFRESH_DEFAULT_COOLDOWN,
     DataUpdateCoordinator,
-    REQUEST_REFRESH_DEFAULT_COOLDOWN, UpdateFailed,
+    UpdateFailed,
 )
 from homeassistant.util import dt
 
-from custom_components.bcnn.bcnn_api import BCNNApi
-from custom_components.bcnn.const import (
+from .bcnn_api import BCNNApi
+from .const import (
+    ATTR_LAST_UPDATE_TIME,
     CONF_ACCOUNT,
-    DOMAIN,
     CONF_INFO,
     CONF_PAYMENT,
     CONF_READINGS,
-    ATTR_LAST_UPDATE_TIME,
+    DOMAIN,
 )
+from .exceptions import BCNNAuthError, BCNNConnectionError, BCNNParseError
+from .repairs import clear_parse_error_issue, raise_parse_error_issue
 
 _LOGGER = logging.getLogger(__name__)
 
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAYS = (5, 15)  # seconds between attempt 1→2 and 2→3
 
-class BCNNCoordinator(DataUpdateCoordinator):
-    """Coordinator is responsible for querying the device at a specified route."""
+
+class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator responsible for querying the Center-SBK site."""
 
     _api: BCNNApi
     account: str
 
-    def __init__(self, hass: HomeAssistant, *, bcnn_api: BCNNApi, account: str) -> None:
-        """Initialise a custom coordinator."""
+    def __init__(self, hass: HomeAssistant, *, api: BCNNApi, account: str) -> None:
         self.account = str(account)
-        self.data = {
-            CONF_ACCOUNT: self.account,
-            CONF_INFO: {},
-            CONF_PAYMENT: {},
-            CONF_READINGS: [],
-            ATTR_LAST_UPDATE_TIME: None,
-        }
-        self._api = bcnn_api
+        self._api = api
         self.lock = asyncio.Lock()
         super().__init__(
             hass,
@@ -59,49 +56,56 @@ class BCNNCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from Center-SBK"""
-        self.logger.debug("Start updating Center-SBK data")
+        _LOGGER.debug("Обновление данных Center-SBК для аккаунта %s", self.account)
+        last_error: Exception | None = None
 
-        new_data: dict[str, Any] = {
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                async with self.lock:
+                    readings = await self._api.get_information_on_water_meters(self.account)
+                    info = await self._api.get_address(self.account)
+                    payment = await self._api.get_current_payment(self.account)
+                break  # успех — выходим из цикла
+            except BCNNAuthError as error:
+                self.config_entry.async_start_reauth(self.hass)
+                raise UpdateFailed(f"Ошибка аутентификации Center-SBK: {error}") from error
+            except BCNNParseError as error:
+                raise_parse_error_issue(self.hass, self.account, str(error))
+                raise UpdateFailed(f"Структура сайта Center-SBK изменилась: {error}") from error
+            except BCNNConnectionError as error:
+                last_error = error
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    delay = _RETRY_DELAYS[attempt]
+                    _LOGGER.warning(
+                        "Сетевая ошибка Center-SBK (попытка %d/%d), повтор через %ds: %s",
+                        attempt + 1,
+                        _RETRY_ATTEMPTS,
+                        delay,
+                        error,
+                    )
+                    await asyncio.sleep(delay)
+            except Exception as error:
+                raise UpdateFailed(f"Ошибка получения данных Center-SBK: {error}") from error
+        else:
+            raise UpdateFailed(
+                f"Center-SBK недоступен после {_RETRY_ATTEMPTS} попыток: {last_error}"
+            )
+
+        # Reset any active parse-error repair issue on a successful refresh.
+        clear_parse_error_issue(self.hass, self.account)
+
+        _LOGGER.debug("Данные Center-SBK обновлены успешно")
+        return {
             CONF_ACCOUNT: self.account,
-            CONF_INFO: {},
-            CONF_PAYMENT: {},
-            CONF_READINGS: [],
+            CONF_INFO: info,
+            CONF_PAYMENT: payment,
+            CONF_READINGS: readings,
             ATTR_LAST_UPDATE_TIME: dt.now(),
         }
-        try:
-            self.logger.debug("Get general info for account %s", self.account)
-            async with self.lock:
-                new_data[CONF_READINGS] = await self.hass.async_add_executor_job(
-                    partial(self._api.get_information_on_water_meters, self.account)
-                )
-                new_data[CONF_INFO] = await self.hass.async_add_executor_job(
-                    partial(self._api.get_address, self.account)
-                )
-                new_data[CONF_PAYMENT] = await self.hass.async_add_executor_job(
-                    partial(self._api.get_current_payment, self.account)
-                )
 
-            self.logger.debug("Center-SBK data updated successfully")
-            self.logger.debug("%s", new_data)
-            return new_data
-        except Exception as error:  # pylint: disable=broad-except
-            raise UpdateFailed(
-                f"Error communicating with Center-SBK API: {error}"
-            ) from error
+    async def async_send_readings(self, meter_values: tuple[tuple[str, str], ...]) -> str | None:
+        _LOGGER.debug("Отправка показаний: %s", meter_values)
+        return await self._api.send_meter_readings(self.account, meter_values)
 
-    async def async_send_readings(self, meter_values):
-        _LOGGER.debug(meter_values)
-        response = await self.hass.async_add_executor_job(
-            partial(self._api.send_meter_readings, self.account, meter_values)
-        )
-        if response:
-            return response
-        pass
-
-    async def async_get_bill(self) -> bytes:
-        response = await self.hass.async_add_executor_job(
-            partial(self._api.get_bill, self.account)
-        )
-        if response:
-            return response
+    async def async_get_bill(self) -> bytes | None:
+        return await self._api.get_bill(self.account)

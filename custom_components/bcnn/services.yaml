@@ -1,81 +1,80 @@
 refresh:
   fields:
     device_id:
-      required: true
       selector:
         device:
-          filter:
-            integration: bcnn
+          integration: bcnn
+
 get_bill:
   fields:
     device_id:
-      required: true
       selector:
         device:
-          filter:
-            integration: bcnn
+          integration: bcnn
 
 send_readings:
   fields:
     device_id:
-      required: true
       selector:
         device:
-          filter:
-            integration: bcnn
-    cw1:
-      required: true
+          integration: bcnn
+    meter_1:
       selector:
         entity:
-          filter:
-            domain: sensor
-            device_class: water
-    cw1val:
-      required: true
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_1_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_2:
       selector:
         entity:
-          filter:
-            domain: sensor
-            device_class: water
-    hw1:
-      required: true
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_2_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_3:
       selector:
         entity:
-          filter:
-            domain: sensor
-            device_class: water
-    hw1val:
-      required: true
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_3_value:
+      selector:
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    meter_4:
       selector:
         entity:
-          filter:
-            domain: sensor
-            device_class: water
-    cw2:
-      required: false
+          integration: bcnn
+          domain: sensor
+          device_class: water
+    meter_4_value:
       selector:
-        entity:
-          filter:
-            domain: sensor
-            device_class: water
-    cw2val:
-      required: false
+        number:
+          min: 0
+          max: 99999
+          step: 0.001
+          unit_of_measurement: "m³"
+          mode: box
+    readings:
+      example: '{"12345678": 105.123, "87654321": 50.500}'
       selector:
-        entity:
-          filter:
-            domain: sensor
-            device_class: water
-    hw2:
-      required: false
-      selector:
-        entity:
-          filter:
-            domain: sensor
-            device_class: water
-    hw2val:
-      required: false
-      selector:
-        entity:
-          filter:
-            domain: sensor
-            device_class: water
+        object:

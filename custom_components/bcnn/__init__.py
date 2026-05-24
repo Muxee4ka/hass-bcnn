@@ -2,56 +2,54 @@
 
 from __future__ import annotations
 
+from functools import partial
 import logging
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from transliterate import translit
 
 from .bcnn_api import BCNNApi
-from .const import DOMAIN, PLATFORMS, CONF_LOGIN, CONF_PASSWORD, CONF_ACCOUNT
+from .const import CONF_ACCOUNT, CONF_LOGIN, CONF_PASSWORD, PLATFORMS
 from .coordinator import BCNNCoordinator
 from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
 
-OPTIONS_SCHEMA = {
-    vol.Required(CONF_LOGIN, msg="Login"): str,
-    vol.Required(CONF_PASSWORD, msg="Password"): str,
-    vol.Required(CONF_ACCOUNT, msg="Account"): str,
-}
+type BCNNConfigEntry = ConfigEntry[BCNNCoordinator]
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool:
     """Set up Center-SBK from a config entry."""
-
-    _LOGGER.info(["async_setup_entry", config_entry.data, config_entry.options])
-    bcnn_api = BCNNApi(
-        str(config_entry.data.get(CONF_LOGIN)),
-        str(config_entry.data.get(CONF_PASSWORD)),
-    )
-    _coordinator = BCNNCoordinator(
-        hass, bcnn_api=bcnn_api, account=str(config_entry.data.get(CONF_ACCOUNT))
+    _LOGGER.debug(
+        "async_setup_entry: entry_id=%s account=%s", entry.entry_id, entry.data[CONF_ACCOUNT]
     )
 
-    await _coordinator.async_config_entry_first_refresh()
+    api = BCNNApi(
+        login=entry.data[CONF_LOGIN],
+        password=entry.data[CONF_PASSWORD],
+    )
+    coordinator = BCNNCoordinator(hass, api=api, account=entry.data[CONF_ACCOUNT])
+    await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = _coordinator
+    entry.runtime_data = coordinator
 
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    # Warm up transliterate off the event loop before any platform that needs
+    # it (sensor / number / button) gets set up. The first call inside the
+    # library does blocking os.listdir + import_module.
+    await hass.async_add_executor_job(partial(translit, "прогрев", "ru", reversed=True))
 
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_services(hass)
-
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(
-        config_entry, PLATFORMS
-    ):
-        hass.data[DOMAIN].pop(config_entry.entry_id)
-
-        await async_unload_services(hass)
-
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        coordinator: BCNNCoordinator | None = entry.runtime_data
+        if coordinator is not None:
+            await coordinator._api.close()
+        await async_unload_services(hass, entry)
     return unload_ok

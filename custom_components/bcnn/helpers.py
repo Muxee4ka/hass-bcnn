@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
-import re
-from datetime import timedelta, date, datetime
-from typing import Any
-from typing import TYPE_CHECKING
-import locale
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.util import dt
 
 from .const import DOMAIN
+from .parsers import MONTHS, convert_period_to_date
+
+__all__ = [
+    "MONTHS",
+    "async_get_coordinator",
+    "async_get_device_entry_by_device_id",
+    "async_get_device_friendly_name",
+    "convert_period_to_date",
+    "get_previous_month",
+]
 
 if TYPE_CHECKING:
     from .coordinator import BCNNCoordinator
-
-
-# Устанавливаем русскую локаль, чтобы правильно интерпретировать названия месяцев
-locale.setlocale(locale.LC_TIME, "ru_RU.UTF-8")
 
 
 async def async_get_device_entry_by_device_id(
@@ -36,55 +38,30 @@ async def async_get_device_entry_by_device_id(
     raise ValueError(f"Device {device_id} not found")
 
 
-async def async_get_device_friendly_name(
-    hass: HomeAssistant, device_id: str | None
-) -> str | None:
+async def async_get_device_friendly_name(hass: HomeAssistant, device_id: str | None) -> str | None:
     """Get device friendly name"""
 
     device_entry = await async_get_device_entry_by_device_id(hass, device_id)
     return device_entry.name_by_user or device_entry.name
 
 
-async def async_get_coordinator(
-    hass: HomeAssistant, device_id: str | None
-) -> BCNNCoordinator:
-    """Get coordinator for device id"""
-
+async def async_get_coordinator(hass: HomeAssistant, device_id: str | None) -> BCNNCoordinator:
+    """Get coordinator for device id via runtime_data."""
     device_entry = await async_get_device_entry_by_device_id(hass, device_id)
     for entry_id in device_entry.config_entries:
-        if (config_entry := hass.config_entries.async_get_entry(entry_id)) is None:
+        config_entry = hass.config_entries.async_get_entry(entry_id)
+        if config_entry is None or config_entry.domain != DOMAIN:
             continue
-        if config_entry.domain == DOMAIN:
-            return hass.data[DOMAIN][entry_id]
+        coordinator: BCNNCoordinator = config_entry.runtime_data
+        return coordinator
 
     raise ValueError(f"Config entry for {device_id} not found")
-
-
-def get_float_value(hass: HomeAssistant, entity_id: str | None) -> float | None:
-    """Get float value from entity state"""
-    if entity_id is not None:
-        cur_state = hass.states.get(entity_id)
-        if cur_state is not None:
-            return _to_float(cur_state.state)
-    return None
-
-
-def get_upbdate_interval(hour: int, minute: int, second: int) -> timedelta:
-    """Get update interval to time"""
-    now = dt.now()
-    next_day = now + timedelta(days=1)
-    next_time = next_day.replace(hour=hour, minute=minute, second=second)
-    minutes_to_next_time = (next_time - now).total_seconds() / 60
-    interval = timedelta(minutes=minutes_to_next_time)
-    return interval
 
 
 def get_previous_month() -> date:
     """Get first day of previous month"""
     today = date.today()
-    first_day = (today - timedelta(days=today.day)).replace(
-        day=1
-    )  # first day of previous month
+    first_day = (today - timedelta(days=today.day)).replace(day=1)  # first day of previous month
     return first_day
 
 
@@ -161,42 +138,3 @@ def _to_year(value: str | None, fmt: str) -> int | None:
         return None
 
     return _year
-
-
-MONTHS = {
-    "январь": 1,
-    "февраль": 2,
-    "март": 3,
-    "апрель": 4,
-    "май": 5,
-    "июнь": 6,
-    "июль": 7,
-    "август": 8,
-    "сентябрь": 9,
-    "октябрь": 10,
-    "ноябрь": 11,
-    "декабрь": 12,
-}
-
-
-def convert_period_to_date(period_str: str) -> date:
-    """Преобразует строку периода вида 'месяц год г.' в дату.
-
-    Возвращает текущую дату при некорректном формате.
-    """
-    parts = (period_str or "").split()
-    if len(parts) != 3:
-        return date.today()
-    month_str, year_str, _ = parts
-
-    # извлекаем год (например, из '2024' или '2024г.')
-    match = re.search(r"\d{4}", year_str)
-    if not match:
-        return date.today()
-    year = int(match.group())
-
-    month_num = MONTHS.get(month_str.lower())
-    if month_num is None:
-        return date.today()
-
-    return date(year, month_num, 1)

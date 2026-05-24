@@ -6,9 +6,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from homeassistant.components.button import (
-    ButtonEntityDescription,
-    ButtonEntity,
     ENTITY_ID_FORMAT,
+    ButtonEntity,
+    ButtonEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_DEVICE_ID
@@ -20,7 +20,7 @@ from homeassistant.util import slugify
 from .const import DOMAIN
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
-from .services import SERVICE_REFRESH, SERVICE_GET_BILL, SERVICE_SEND_READINGS
+from .services import SERVICE_GET_BILL, SERVICE_REFRESH, SERVICE_SEND_READINGS
 
 
 @dataclass
@@ -56,16 +56,16 @@ BUTTON_DESCRIPTIONS: tuple[BCNNButtonEntityDescription, ...] = (
         ),
         translation_key="get_bill",
     ),
-    # BCNNButtonEntityDescription(
-    #     key="send_readings",
-    #     icon="mdi:arrow-top-right",
-    #     name="Отправить показания",
-    #     entity_category=EntityCategory.DIAGNOSTIC,
-    #     async_press=lambda coordinator, device_id: coordinator.hass.services.async_call(
-    #         DOMAIN, SERVICE_SEND_READINGS, {ATTR_DEVICE_ID: device_id}, blocking=True
-    #     ),
-    #     translation_key="send_readings",
-    # ),
+    BCNNButtonEntityDescription(
+        key="send_readings",
+        icon="mdi:arrow-top-right",
+        name="Отправить показания",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        async_press=lambda coordinator, device_id: coordinator.hass.services.async_call(
+            DOMAIN, SERVICE_SEND_READINGS, {ATTR_DEVICE_ID: device_id}, blocking=True
+        ),
+        translation_key="send_readings",
+    ),
 )
 
 
@@ -111,11 +111,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up a config entry."""
 
-    coordinator: BCNNCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNButtonEntity] = [
         BCNNButtonEntity(coordinator, entity_description)
         for entity_description in BUTTON_DESCRIPTIONS
     ]
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)

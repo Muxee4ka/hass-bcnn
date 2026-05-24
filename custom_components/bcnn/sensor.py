@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
+import logging
 from typing import Any
-from transliterate import translit
 
 from homeassistant.components.sensor import (
+    ENTITY_ID_FORMAT,
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorDeviceClass,
     SensorStateClass,
-    ENTITY_ID_FORMAT,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfVolume
@@ -22,18 +21,19 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from transliterate import translit
 
 from .const import (
-    DOMAIN,
+    ATTR_LAST_UPDATE_TIME,
+    CONF_ACCOUNT,
     CONF_INFO,
     CONF_PAYMENT,
     CONF_READINGS,
-    CONF_ACCOUNT,
-    ATTR_LAST_UPDATE_TIME,
 )
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
-from .helpers import _to_str, _to_float
+from .helpers import _to_float, _to_str
+from .parsers import parse_verification_date
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,17 +49,13 @@ class BCNNEntityDescriptionMixin:
 class BCNNBaseSensorEntityDescription(SensorEntityDescription):
     """Describes Center-SBK sensor entity default overrides."""
 
-    attr_fn: Callable[[dict[str, Any]], dict[str, StateType | datetime | date]] = (
-        lambda _: {}
-    )
+    attr_fn: Callable[[dict[str, Any]], dict[str, StateType | datetime | date]] = lambda _: {}
     avabl_fn: Callable[[dict[str, Any]], bool] = lambda _: True
     icon_fn: Callable[[dict[str, Any]], str | None] = lambda _: None
 
 
 @dataclass(frozen=True, kw_only=True)
-class BCNNSensorEntityDescription(
-    BCNNBaseSensorEntityDescription, BCNNEntityDescriptionMixin
-):
+class BCNNSensorEntityDescription(BCNNBaseSensorEntityDescription, BCNNEntityDescriptionMixin):
     """Describes Center-SBK sensor entity."""
 
 
@@ -95,7 +91,7 @@ SENSOR_TYPES: tuple[BCNNSensorEntityDescription, ...] = (
             "К оплате": _to_float(data[CONF_PAYMENT].get("due_payment")),
             **{
                 elem.get("period_or_service"): elem.get("due_payment")
-                for elem in data[CONF_PAYMENT].get("services")
+                for elem in (data[CONF_PAYMENT].get("services") or [])
             },
         },
     ),
@@ -115,6 +111,33 @@ SENSOR_TYPES: tuple[BCNNSensorEntityDescription, ...] = (
         value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("due_payment")),
         avabl_fn=lambda data: CONF_PAYMENT in data,
         translation_key="balance",
+    ),
+    BCNNSensorEntityDescription(
+        key="opening_balance",
+        name="Входящее сальдо",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("opening_balance")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="opening_balance",
+    ),
+    BCNNSensorEntityDescription(
+        key="accrued",
+        name="Начислено",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("accrued")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="accrued",
+    ),
+    BCNNSensorEntityDescription(
+        key="paid",
+        name="Оплачено",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="RUB",
+        value_fn=lambda data: _to_float(data[CONF_PAYMENT].get("paid")),
+        avabl_fn=lambda data: CONF_PAYMENT in data,
+        translation_key="paid",
     ),
     BCNNSensorEntityDescription(
         key="current_timestamp",
@@ -160,21 +183,26 @@ class BCNNSensor(BCNNBaseCoordinatorEntity, SensorEntity):
             and self.entity_description.avabl_fn(self._get_data())
         )
 
+    async def async_added_to_hass(self) -> None:
+        """Populate state from coordinator data already fetched at setup."""
+        await super().async_added_to_hass()
+        self._handle_coordinator_update()
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self._attr_native_value = self.entity_description.value_fn(self._get_data())
+        data = self._get_data()
+        if data is None:
+            self.async_write_ha_state()
+            return
 
-        self._attr_extra_state_attributes = self.entity_description.attr_fn(
-            self._get_data()
-        )
+        self._attr_native_value = self.entity_description.value_fn(data)
+        self._attr_extra_state_attributes = self.entity_description.attr_fn(data)
 
         if self.entity_description.icon_fn is not None:
-            self._attr_icon = self.entity_description.icon_fn(self._get_data())
+            self._attr_icon = self.entity_description.icon_fn(data)
 
-        self.coordinator.logger.debug(
-            "Entity ID: %s Value: %s", self.entity_id, self.native_value
-        )
+        self.coordinator.logger.debug("Entity ID: %s Value: %s", self.entity_id, self.native_value)
 
         self.async_write_ha_state()
 
@@ -200,18 +228,16 @@ class BCNNMeterSensor(BCNNSensor):
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get data for Sensor"""
-        if CONF_READINGS in self.coordinator.data:
-            _LOGGER.debug(self.device_number)
-            _LOGGER.debug(self.coordinator.data)
-            _data = list(
-                filter(
-                    lambda x: x.get("device_number") == self.device_number,
-                    self.coordinator.data[CONF_READINGS],
-                )
-            ).pop()
-        else:
-            _data = None
-        return _data
+        if CONF_READINGS not in self.coordinator.data:
+            return None
+        return next(
+            (
+                x
+                for x in self.coordinator.data[CONF_READINGS]
+                if x.get("device_number") == self.device_number
+            ),
+            None,
+        )
 
 
 def _get_meter_slug(_type: str, number_meter: str) -> str:
@@ -231,12 +257,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up a config entry."""
-
-    coordinator: BCNNCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BCNNCoordinator = entry.runtime_data
 
     entities: list[BCNNSensor] = [
-        BCNNSensor(coordinator, entity_description)
-        for entity_description in SENSOR_TYPES
+        BCNNSensor(coordinator, entity_description) for entity_description in SENSOR_TYPES
     ]
 
     if CONF_READINGS in coordinator.data:
@@ -244,25 +268,50 @@ async def async_setup_entry(
             _LOGGER.debug(meter)
             device_number = meter.get("device_number")
             _type = meter.get("device_type")
+            slug = _get_meter_slug(_type, device_number)
+            name = _get_meter_name(_type, device_number)
             entities.append(
                 BCNNMeterSensor(
                     coordinator,
                     BCNNSensorEntityDescription(
-                        key=_get_meter_slug(_type, device_number),
-                        name=_get_meter_name(_type, device_number),
+                        key=slug,
+                        name=name,
                         native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
                         device_class=SensorDeviceClass.WATER,
                         state_class=SensorStateClass.TOTAL,
-                        value_fn=lambda data: _to_float(data.get("cur_value") or data.get("prev_value")),
-                        avabl_fn=lambda data: len(data) > 0,
-                        translation_key=_get_meter_slug(_type, device_number),
+                        value_fn=lambda data: _to_float(
+                            data.get("cur_value") or data.get("prev_value")
+                        ),
+                        avabl_fn=lambda data: bool(data),
                         attr_fn=lambda data: {
                             "device_number": data.get("device_number"),
                             "Услуга": data.get("device_type"),
                             "Номер счетчика": data.get("device_number"),
                             "Предыдущие показания": data.get("prev_value"),
                             "Текущие показания": data.get("cur_value"),
-                            "Количество потреблённого ресурса": data.get("amount_water")
+                            "Количество потреблённого ресурса": data.get("amount_water"),
+                        },
+                    ),
+                    device_number,
+                    _type,
+                )
+            )
+            entities.append(
+                BCNNMeterSensor(
+                    coordinator,
+                    BCNNSensorEntityDescription(
+                        key=f"{slug}_verification_date",
+                        name=f"{name} — срок поверки",
+                        device_class=SensorDeviceClass.DATE,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                        value_fn=lambda data: parse_verification_date(
+                            data.get("verification_date_raw")
+                        ),
+                        avabl_fn=lambda data: bool(data)
+                        and parse_verification_date(data.get("verification_date_raw")) is not None,
+                        attr_fn=lambda data: {
+                            "device_number": data.get("device_number"),
+                            "raw": data.get("verification_date_raw"),
                         },
                     ),
                     device_number,
@@ -270,4 +319,4 @@ async def async_setup_entry(
                 )
             )
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
