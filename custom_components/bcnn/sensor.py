@@ -33,6 +33,7 @@ from .const import (
 from .coordinator import BCNNCoordinator
 from .entity import BCNNBaseCoordinatorEntity
 from .helpers import _to_float, _to_str
+from .parsers import parse_readings_date
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -306,6 +307,23 @@ async def async_setup_entry(
                         state_class=SensorStateClass.TOTAL_INCREASING,
                         value_fn=lambda data: _to_float(data.get("amount_water")),
                         avabl_fn=lambda data: bool(data) and bool(data.get("amount_water")),
+                        attr_fn=lambda data: {"device_number": data.get("device_number")},
+                    ),
+                    device_number,
+                    _type,
+                )
+            )
+            entities.append(
+                BCNNMeterSensor(
+                    coordinator,
+                    BCNNSensorEntityDescription(
+                        key=f"{slug}_readings_date",
+                        name=f"{name} — дата показаний",
+                        device_class=SensorDeviceClass.DATE,
+                        entity_category=EntityCategory.DIAGNOSTIC,
+                        value_fn=lambda data: parse_readings_date(data.get("readings_date")),
+                        avabl_fn=lambda data: bool(data)
+                        and parse_readings_date(data.get("readings_date")) is not None,
                         attr_fn=lambda data: {"device_number": data.get("device_number")},
                     ),
                     device_number,

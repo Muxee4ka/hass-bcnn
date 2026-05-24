@@ -32,7 +32,6 @@ class BCNNMeterInputNumber(BCNNBaseCoordinatorEntity, RestoreNumber):
 
     _attr_native_min_value = 0
     _attr_native_max_value = 99999
-    _attr_native_step = 0.001
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
     _attr_device_class = NumberDeviceClass.WATER
     _attr_mode = NumberMode.BOX
@@ -57,18 +56,31 @@ class BCNNMeterInputNumber(BCNNBaseCoordinatorEntity, RestoreNumber):
         self.entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, self._attr_unique_id, hass=coordinator.hass
         )
+        # Per-meter step: each meter publishes its own "digits after the dot"
+        # in the cabinet_change onchange attribute (formatter[1]). Default to
+        # 0.001 if the formatter is missing for some reason.
+        meter = self._meter_row()
+        formatter = (meter or {}).get("formatter")
+        if formatter and len(formatter) == 2:
+            digits_after = len(formatter[1])
+            self._attr_native_step = 10 ** (-digits_after) if digits_after > 0 else 1.0
+        else:
+            self._attr_native_step = 0.001
         self._attr_native_value = self._meter_value_from_coordinator()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {ATTR_DEVICE_NUMBER: self.device_number}
 
-    def _meter_value_from_coordinator(self) -> float | None:
+    def _meter_row(self) -> dict | None:
         readings = (self.coordinator.data or {}).get(CONF_READINGS) or []
-        meter = next(
+        return next(
             (m for m in readings if m.get("device_number") == self.device_number),
             None,
         )
+
+    def _meter_value_from_coordinator(self) -> float | None:
+        meter = self._meter_row()
         if meter is None:
             return None
         return _to_float(meter.get("cur_value")) or _to_float(meter.get("prev_value"))

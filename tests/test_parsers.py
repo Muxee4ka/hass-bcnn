@@ -51,3 +51,26 @@ def test_months_table_complete() -> None:
     assert len(MONTHS) == 12
     assert MONTHS["январь"] == 1
     assert MONTHS["декабрь"] == 12
+
+
+class TestParseReadingsDate:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("25.04.2026", date(2026, 4, 25)),
+            ("2026-04-25", date(2026, 4, 25)),
+            ("25/04/2026", date(2026, 4, 25)),
+            ("25.04.26", date(2026, 4, 25)),
+            ("  25.04.2026  ", date(2026, 4, 25)),
+        ],
+    )
+    def test_supported_formats(self, value: str, expected: date) -> None:
+        from custom_components.bcnn.parsers import parse_readings_date
+
+        assert parse_readings_date(value) == expected
+
+    @pytest.mark.parametrize("bad", ["", None, "abc", "2026", "25 апреля 2026"])
+    def test_invalid_returns_none(self, bad: str | None) -> None:
+        from custom_components.bcnn.parsers import parse_readings_date
+
+        assert parse_readings_date(bad) is None

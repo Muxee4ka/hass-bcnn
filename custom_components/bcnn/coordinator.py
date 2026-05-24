@@ -25,7 +25,8 @@ from .const import (
     CONF_READINGS,
     DOMAIN,
 )
-from .exceptions import BCNNAuthError, BCNNConnectionError
+from .exceptions import BCNNAuthError, BCNNConnectionError, BCNNParseError
+from .repairs import clear_parse_error_issue, raise_parse_error_issue
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +76,9 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except BCNNAuthError as error:
                 self.config_entry.async_start_reauth(self.hass)
                 raise UpdateFailed(f"Ошибка аутентификации Center-SBK: {error}") from error
+            except BCNNParseError as error:
+                raise_parse_error_issue(self.hass, self.account, str(error))
+                raise UpdateFailed(f"Структура сайта Center-SBK изменилась: {error}") from error
             except BCNNConnectionError as error:
                 last_error = error
                 if attempt < _RETRY_ATTEMPTS - 1:
@@ -93,6 +97,9 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(
                 f"Center-SBK недоступен после {_RETRY_ATTEMPTS} попыток: {last_error}"
             )
+
+        # Reset any active parse-error repair issue on a successful refresh.
+        clear_parse_error_issue(self.hass, self.account)
 
         _LOGGER.debug("Данные Center-SBK обновлены успешно")
         return {

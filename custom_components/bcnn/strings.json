@@ -147,5 +147,19 @@
         }
       }
     }
+  },
+  "issues": {
+    "parse_error": {
+      "title": "Center-SBK: cabinet page structure changed",
+      "description": "The integration could not scrape the cabinet for account {account}. The site's HTML may have changed. Please open an issue at the project tracker with the error detail below so a fix can be released.\n\nDetail: {detail}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Acknowledge",
+            "description": "Click submit to dismiss this notification. The issue will reappear if the next refresh hits the same error."
+          }
+        }
+      }
+    }
   }
 }

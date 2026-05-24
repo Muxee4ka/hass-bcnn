@@ -295,6 +295,7 @@ class BCNNApi:
 
             device_type = columns[0].text.strip()
             device_number = columns[1].text.strip()
+            readings_date = columns[2].text.strip()
             prev_value = columns[3].text.strip()
             cur_value = columns[4].text.strip()
             amount_water = columns[5].text.strip()
@@ -318,10 +319,12 @@ class BCNNApi:
                 {
                     "device_type": device_type,
                     "device_number": device_number,
+                    "readings_date": readings_date,
                     "prev_value": prev_value,
                     "cur_value": cur_value,
                     "amount_water": amount_water,
                     "repr_number": repr_number,
+                    "formatter": formatter,
                 }
             )
             self.devices[str(account)].add(
