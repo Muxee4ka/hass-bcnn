@@ -300,23 +300,6 @@ async def async_setup_entry(
                 BCNNMeterSensor(
                     coordinator,
                     BCNNSensorEntityDescription(
-                        key=f"{slug}_amount",
-                        name=f"{name} — потребление",
-                        native_unit_of_measurement=UnitOfVolume.CUBIC_METERS,
-                        device_class=SensorDeviceClass.WATER,
-                        state_class=SensorStateClass.TOTAL_INCREASING,
-                        value_fn=lambda data: _to_float(data.get("amount_water")),
-                        avabl_fn=lambda data: bool(data) and bool(data.get("amount_water")),
-                        attr_fn=lambda data: {"device_number": data.get("device_number")},
-                    ),
-                    device_number,
-                    _type,
-                )
-            )
-            entities.append(
-                BCNNMeterSensor(
-                    coordinator,
-                    BCNNSensorEntityDescription(
                         key=f"{slug}_verification_date",
                         name=f"{name} — срок поверки",
                         device_class=SensorDeviceClass.DATE,

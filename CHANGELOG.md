@@ -16,9 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`device_class=problem`).
 - **Payment breakdown sensors** — `opening_balance`, `accrued`, `paid`
   as separate top-level sensors (RUB, monetary).
-- **Per-meter «потребление» sensor** with `state_class=TOTAL_INCREASING`
-  for Home Assistant Water Dashboard.
-- **Per-meter «дата показаний» sensor** (parsed from the readings table).
+- **Per-meter «срок поверки» sensor** (DATE, diagnostic) — calibration
+  expiry month parsed from the cabinet table as `MM/YY`.
 - **ЕЛС on DeviceInfo.serial_number** — exposed on the HA device page.
 - **`repairs.py`** — actionable Repair Issue when the cabinet HTML changes
   shape (`BCNNParseError`); auto-resolved on the next successful refresh.

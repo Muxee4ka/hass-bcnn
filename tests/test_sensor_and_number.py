@@ -127,52 +127,6 @@ async def test_payment_breakdown_sensors(
     assert hass.states.get(f"sensor.bcnn_{account}_paid").state == "0.0"
 
 
-async def test_amount_water_sensor_per_meter(
-    hass: HomeAssistant, auto_enable_custom_integrations, mock_api, mock_config_entry
-) -> None:
-    """A separate '<meter> — потребление' sensor is created per meter."""
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    registry = er.async_get(hass)
-    amount_sensors = [
-        e
-        for e in registry.entities.values()
-        if e.platform == DOMAIN and e.domain == "sensor" and e.unique_id.endswith("_amount")
-    ]
-    assert len(amount_sensors) == 2
-    cold_amount = next(e for e in amount_sensors if "12345678" in e.unique_id)
-    assert hass.states.get(cold_amount.entity_id).state == "5.123"
-
-
-async def test_amount_water_unavailable_when_empty(
-    hass: HomeAssistant, auto_enable_custom_integrations, mock_api, mock_config_entry
-) -> None:
-    """Real cabinets return amount_water='' early in the period — sensor is unavailable."""
-    mock_api.get_information_on_water_meters.return_value = [
-        {
-            "device_type": "ХВС",
-            "device_number": "12345678",
-            "prev_value": "00100.000",
-            "cur_value": "",
-            "amount_water": "",
-            "repr_number": "cw_12345678",
-        }
-    ]
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    registry = er.async_get(hass)
-    amount = next(
-        e
-        for e in registry.entities.values()
-        if e.platform == DOMAIN and e.domain == "sensor" and e.unique_id.endswith("_amount")
-    )
-    assert hass.states.get(amount.entity_id).state == STATE_UNAVAILABLE
-
-
 async def test_els_is_exposed_as_serial_number(
     hass: HomeAssistant, auto_enable_custom_integrations, mock_api, mock_config_entry
 ) -> None:
