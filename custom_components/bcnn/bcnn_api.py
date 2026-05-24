@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from itertools import islice
@@ -10,9 +11,8 @@ from pprint import pformat
 import re
 from typing import Any, Final
 
+import aiohttp
 from bs4 import BeautifulSoup
-import requests
-from requests import Response, Session
 
 from custom_components.bcnn.exceptions import (
     BCNNAuthError,
@@ -40,7 +40,8 @@ HEADERS_JSON = {
     "User-Agent": USER_AGENT,
 }
 LOGGER = getLogger(__name__)
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+SESSION_COOKIE = "Drupal.visitor.autologout_login"
 
 
 def _read_manifest_version() -> str:
@@ -92,10 +93,17 @@ def _require_input(soup: BeautifulSoup, name: str, context: str) -> str:
 
 
 class BCNNApi:
+    """Async client for lk.bcnn.ru.
+
+    A single ClientSession holds the Drupal session cookie. Re-auth happens
+    automatically once `start_session` falls outside the 30-minute window.
+    """
+
     VERSION: Final[str] = _read_manifest_version()
 
     def __init__(self, login: str, password: str) -> None:
-        self._session: Session | None = None
+        self._session: aiohttp.ClientSession | None = None
+        self._auth_lock = asyncio.Lock()
         self.login = login
         self.password = password
         self.base_url = "https://lk.bcnn.ru"
@@ -110,68 +118,44 @@ class BCNNApi:
             raise ValueError(f"Номер лицевого счёта {account!r} не содержит цифр")
         return int(digits)
 
-    @property
-    def session(self) -> Session:
-        if not self._session or self.session_is_expired():
-            self._session = Session()
-            self._session.headers = HEADERS_HTML
-            self.authenticate()
-        return self._session
-
     def session_is_expired(self) -> bool:
         return not (self.start_session and self.start_session + 1800 > datetime.now().timestamp())
 
-    def get_accounts(self) -> dict[str, Any]:
-        """Возвращает список лицевых счетов из личного кабинета.
+    async def _ensure_session(self) -> aiohttp.ClientSession:
+        """Create the ClientSession + authenticate on first use / after expiry."""
+        async with self._auth_lock:
+            if self._session is None or self._session.closed:
+                self._session = aiohttp.ClientSession(headers=HEADERS_HTML, timeout=REQUEST_TIMEOUT)
+                self.start_session = None
+            if self.session_is_expired():
+                await self._authenticate()
+        return self._session
 
-        Пример ответа:
-        {'code': 0,
-         'data': {'accountInfo': {'accounts': [123456789, 987654321],
-                                  'occ': 123456789,
-                                  'view': 'few'},
-                  'errors': []},
-         'message': 'Данные успешно получены'}
-        """
-        json_data = {"data": {}, "function": "getAccountInfo"}
+    async def close(self) -> None:
+        if self._session and not self._session.closed:
+            await self._session.close()
+        self._session = None
+
+    def _cookie(self, name: str) -> str | None:
+        if not self._session:
+            return None
+        for cookie in self._session.cookie_jar:
+            if cookie.key == name:
+                return cookie.value
+        return None
+
+    async def _authenticate(self) -> None:
+        assert self._session is not None
         try:
-            response: Response = self.session.post(
-                f"{self.base_url}/api/v1/cabinet/querydata",
-                headers=HEADERS_JSON,
-                json=json_data,
-                timeout=REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            raise BCNNConnectionError(f"Ошибка запроса getAccountInfo: {exc}") from exc
-
-        try:
-            payload = response.json()
-        except Exception as exc:
-            LOGGER.error(
-                "Не удалось разобрать ответ getAccountInfo: %s\nТело ответа: %.500s",
-                exc,
-                response.text,
-            )
-            raise BCNNConnectionError(f"Неверный формат ответа getAccountInfo: {exc}") from exc
-
-        LOGGER.debug("getAccountInfo ответ: %s", payload)
-        if payload.get("errors"):
-            errors = payload["errors"]
-            LOGGER.warning("API вернул ошибки getAccountInfo: %s", errors)
-            raise BCNNConnectionError(f"Ошибка API: {errors}")
-
-        return payload
-
-    def authenticate(self) -> None:
-        try:
-            auth_page = self._session.get(
-                f"{self.base_url}/node/4?destination=/node/4", timeout=REQUEST_TIMEOUT
-            )
-            auth_page.raise_for_status()
-        except requests.RequestException as exc:
+            async with self._session.get(
+                f"{self.base_url}/node/4?destination=/node/4"
+            ) as auth_page:
+                auth_page.raise_for_status()
+                body = await auth_page.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Не удалось загрузить страницу авторизации: {exc}") from exc
 
-        soup = BeautifulSoup(auth_page.text, "html.parser")
+        soup = BeautifulSoup(body, "html.parser")
         self.form_build_id = _require_input(soup, "form_build_id", "авторизация")
 
         auth_data = {
@@ -182,33 +166,79 @@ class BCNNApi:
             "op": "Войти",
         }
         try:
-            self._session.post(
-                f"{self.base_url}/node/4?destination=/node/4",
-                data=auth_data,
-                timeout=REQUEST_TIMEOUT,
-            )
-        except requests.RequestException as exc:
+            async with self._session.post(
+                f"{self.base_url}/node/4?destination=/node/4", data=auth_data
+            ) as resp:
+                await resp.read()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка при отправке формы авторизации: {exc}") from exc
 
-        if "Drupal.visitor.autologout_login" not in self._session.cookies:
+        autologout = self._cookie(SESSION_COOKIE)
+        if not autologout:
             raise BCNNAuthError("Неверный логин или пароль")
 
-        self.start_session = int(self._session.cookies.get("Drupal.visitor.autologout_login"))
+        self.start_session = int(autologout)
         LOGGER.info("Успешная авторизация.")
 
-    def navigate_to_readings(self) -> None:
+    async def get_accounts(self) -> dict[str, Any]:
+        """Returns the list of personal accounts the login has access to.
+
+        Example response:
+        {'code': 0,
+         'data': {'accountInfo': {'accounts': [123456789, 987654321],
+                                  'occ': 123456789,
+                                  'view': 'few'},
+                  'errors': []},
+         'message': 'Данные успешно получены'}
+        """
+        session = await self._ensure_session()
+        json_data = {"data": {}, "function": "getAccountInfo"}
         try:
-            response = self.session.get(f"{self.base_url}/readings", timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata",
+                headers=HEADERS_JSON,
+                json=json_data,
+            ) as response:
+                response.raise_for_status()
+                try:
+                    payload = await response.json(content_type=None)
+                except (aiohttp.ContentTypeError, ValueError, json.JSONDecodeError) as exc:
+                    body = await response.text()
+                    LOGGER.error(
+                        "Не удалось разобрать ответ getAccountInfo: %s\nТело: %.500s",
+                        exc,
+                        body,
+                    )
+                    raise BCNNConnectionError(
+                        f"Неверный формат ответа getAccountInfo: {exc}"
+                    ) from exc
+        except aiohttp.ClientError as exc:
+            raise BCNNConnectionError(f"Ошибка запроса getAccountInfo: {exc}") from exc
+
+        LOGGER.debug("getAccountInfo ответ: %s", payload)
+        if payload.get("errors"):
+            errors = payload["errors"]
+            LOGGER.warning("API вернул ошибки getAccountInfo: %s", errors)
+            raise BCNNConnectionError(f"Ошибка API: {errors}")
+
+        return payload
+
+    async def navigate_to_readings(self) -> None:
+        session = await self._ensure_session()
+        try:
+            async with session.get(f"{self.base_url}/readings") as response:
+                response.raise_for_status()
+                body = await response.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Не удалось загрузить страницу показаний: {exc}") from exc
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(body, "html.parser")
         self.form_build_id = _require_input(soup, "form_build_id", "/readings")
         self.form_token = _require_input(soup, "form_token", "/readings")
         LOGGER.info("Загружена форма передачи показаний.")
 
-    def select_account(self, account_number: str) -> None:
+    async def select_account(self, account_number: str) -> None:
+        session = await self._ensure_session()
         account_data = {
             "account_number": account_number,
             "find_account": "OK",
@@ -217,21 +247,21 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(
-                f"{self.base_url}/readings", data=account_data, timeout=REQUEST_TIMEOUT
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(f"{self.base_url}/readings", data=account_data) as response:
+                response.raise_for_status()
+                body = await response.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(
                 f"Ошибка при выборе аккаунта {account_number}: {exc}"
             ) from exc
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(body, "html.parser")
         self.form_build_id = _require_input(soup, "form_build_id", "select_account")
         self.form_token = _require_input(soup, "form_token", "select_account")
         LOGGER.info("Аккаунт %s выбран.", account_number)
 
-    def change_readings_form(self, account_number: str) -> Response:
+    async def change_readings_form(self, account_number: str) -> str:
+        session = await self._ensure_session()
         readings_data = {
             "account_number": account_number,
             "op": "Изменить показания",
@@ -240,21 +270,21 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(
-                f"{self.base_url}/readings", data=readings_data, timeout=REQUEST_TIMEOUT
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(f"{self.base_url}/readings", data=readings_data) as response:
+                response.raise_for_status()
+                body = await response.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка при открытии формы показаний: {exc}") from exc
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(body, "html.parser")
         self.form_build_id = _require_input(soup, "form_build_id", "change_readings_form")
         self.form_token = _require_input(soup, "form_token", "change_readings_form")
         LOGGER.info("Форма для ввода показаний загружена.")
-        return response
+        return body
 
-    def enter_readings(self, account_number: str, readings: dict[str, str]) -> None:
-        self.change_readings_form(account_number)
+    async def enter_readings(self, account_number: str, readings: dict[str, str]) -> None:
+        await self.change_readings_form(account_number)
+        session = await self._ensure_session()
 
         final_data = {
             "account_number": account_number,
@@ -266,26 +296,25 @@ class BCNNApi:
             "form_id": "readings_form",
         }
         try:
-            response = self.session.post(
-                f"{self.base_url}/readings", data=final_data, timeout=REQUEST_TIMEOUT
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(f"{self.base_url}/readings", data=final_data) as response:
+                response.raise_for_status()
+                body = await response.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка при отправке показаний: {exc}") from exc
 
         LOGGER.debug("Отправленные данные: %s", pformat(readings))
-        if "распечатать" in response.text:
+        if "распечатать" in body:
             LOGGER.info("Показания успешно переданы.")
         else:
             LOGGER.warning("Ответ сервера не содержит признака успешной передачи показаний.")
 
-    def get_information_on_water_meters(self, account: str | int) -> list[dict[str, str]]:
-        self.navigate_to_readings()
-        self.select_account(str(account))
-        response = self.change_readings_form(str(account))
+    async def get_information_on_water_meters(self, account: str | int) -> list[dict[str, str]]:
+        await self.navigate_to_readings()
+        await self.select_account(str(account))
+        body = await self.change_readings_form(str(account))
 
         self.devices[str(account)] = set()
-        soup = BeautifulSoup(response.text, "lxml")
+        soup = BeautifulSoup(body, "lxml")
         water_meters: list[dict[str, str]] = []
 
         for row in soup.find_all("tr"):
@@ -345,7 +374,7 @@ class BCNNApi:
             )
         return water_meters
 
-    def send_meter_readings(
+    async def send_meter_readings(
         self,
         account: str | int,
         readings: tuple[tuple[str, str], ...] | None = None,
@@ -356,31 +385,31 @@ class BCNNApi:
         for device_number, value in readings:
             self.add_meter_reading(account, device_number, value)
 
-        self.navigate_to_readings()
-        self.select_account(str(account))
+        await self.navigate_to_readings()
+        await self.select_account(str(account))
         readings_payload = {
             device.repr_number: device.send_value()
             for device in self.devices.get(str(account), set())
         }
-        self.enter_readings(str(account), readings_payload)
+        await self.enter_readings(str(account), readings_payload)
         LOGGER.info("Показания переданы для аккаунта %s", account)
         return "Показания успешно переданы"
 
-    def get_address(self, account: str | int) -> dict[str, Any]:
+    async def get_address(self, account: str | int) -> dict[str, Any]:
+        session = await self._ensure_session()
         occ = self._parse_account_number(account)
         json_data = {"function": "getAddress", "data": {"occ": occ}}
         try:
-            response = self.session.post(
-                f"{self.base_url}/api/v1/cabinet/querydata",
-                json=json_data,
-                timeout=REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+            ) as response:
+                response.raise_for_status()
+                return await response.json(content_type=None)
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка запроса getAddress: {exc}") from exc
-        return response.json()
 
-    def get_chart_data(self, account: str | int) -> dict[str, Any]:
+    async def get_chart_data(self, account: str | int) -> dict[str, Any]:
+        session = await self._ensure_session()
         today = date.today()
         prev_month = today - timedelta(days=today.day)
         occ = self._parse_account_number(account)
@@ -393,40 +422,40 @@ class BCNNApi:
             },
         }
         try:
-            response = self.session.post(
-                f"{self.base_url}/api/v1/cabinet/querydata",
-                json=json_data,
-                timeout=REQUEST_TIMEOUT,
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.post(
+                f"{self.base_url}/api/v1/cabinet/querydata", json=json_data
+            ) as response:
+                response.raise_for_status()
+                return await response.json(content_type=None)
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка запроса getChartData: {exc}") from exc
-        return response.json()
 
     def add_meter_reading(self, account: str | int, device_number: str, value: str) -> None:
         for device in self.devices.get(str(account), set()):
             if device.device_number == device_number:
                 device.new_value = value
 
-    def get_bill(self, account: str | int) -> bytes:
-        self.get_chart_data(account)
+    async def get_bill(self, account: str | int) -> bytes:
+        await self.get_chart_data(account)
+        session = await self._ensure_session()
         try:
-            response = self.session.get(f"{self.base_url}/to_payment_pdf", timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.get(f"{self.base_url}/to_payment_pdf") as response:
+                response.raise_for_status()
+                return await response.read()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка получения PDF: {exc}") from exc
-        return response.content
 
-    def get_charges(self, account: str | int) -> list[dict[str, Any]]:
-        self.get_chart_data(account)
-
+    async def get_charges(self, account: str | int) -> list[dict[str, Any]]:
+        await self.get_chart_data(account)
+        session = await self._ensure_session()
         try:
-            response = self.session.get(f"{self.base_url}/payments", timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-        except requests.RequestException as exc:
+            async with session.get(f"{self.base_url}/payments") as response:
+                response.raise_for_status()
+                body = await response.text()
+        except aiohttp.ClientError as exc:
             raise BCNNConnectionError(f"Ошибка загрузки страницы платежей: {exc}") from exc
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(body, "html.parser")
         table = soup.find("table", {"data-drupal-selector": "edit-table1"})
         if table is None:
             raise BCNNParseError("Таблица начислений не найдена — структура сайта изменилась")
@@ -476,8 +505,8 @@ class BCNNApi:
 
         return data
 
-    def get_current_payment(self, account: str | int) -> dict[str, Any]:
-        payments = self.get_charges(account)
+    async def get_current_payment(self, account: str | int) -> dict[str, Any]:
+        payments = await self.get_charges(account)
         LOGGER.debug(payments)
         if not payments:
             return {}

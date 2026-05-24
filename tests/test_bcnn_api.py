@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import patch
 
+import aiohttp
+from aioresponses import aioresponses
 from bs4 import BeautifulSoup
 import pytest
-import requests
 
 from custom_components.bcnn.bcnn_api import (
     BCNNApi,
@@ -23,28 +24,49 @@ from custom_components.bcnn.exceptions import (
     BCNNParseError,
 )
 
+
+# aiohttp.ClientSession spins up a daemon thread for graceful shutdown that
+# pytest-homeassistant-custom-component flags as "lingering" in its strict
+# verify_cleanup autouse fixture. Override it in this module — the fixture is
+# only useful for the HA-scenario tests that run inside a real HA event loop.
+@pytest.fixture(autouse=True)
+def verify_cleanup():
+    yield
+
+
 FIXTURES = Path(__file__).parent / "fixtures"
+BASE = "https://lk.bcnn.ru"
+AUTH_URL = f"{BASE}/node/4?destination=/node/4"
+READINGS_URL = f"{BASE}/readings"
+QUERYDATA_URL = f"{BASE}/api/v1/cabinet/querydata"
+PAYMENTS_URL = f"{BASE}/payments"
 
 
 def _fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def _response(text: str = "", status: int = 200) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.text = text
-    resp.status_code = status
-    resp.content = text.encode("utf-8")
-    resp.raise_for_status.return_value = None
-    return resp
-
-
 def _make_api(login: str = "user@example.com", password: str = "secret") -> BCNNApi:
-    api = BCNNApi(login=login, password=password)
-    api._session = MagicMock()
-    # Set a fresh start_session so the session property doesn't trigger re-auth.
-    api.start_session = int(datetime.now().timestamp())
-    return api
+    return BCNNApi(login=login, password=password)
+
+
+def _mock_auth(mocked: aioresponses, *, with_cookie: bool = True) -> None:
+    """Register the two requests authenticate() performs.
+
+    aioresponses doesn't populate the real CookieJar from a mocked
+    Set-Cookie header, so tests that need the cookie present should also
+    patch BCNNApi._cookie via `_patch_auth_cookie(value)`.
+    """
+    mocked.get(AUTH_URL, body=_fixture("auth_page.html"))
+    mocked.post(AUTH_URL, body="OK")
+
+
+def _patch_auth_cookie(value: str | None):
+    """Patch BCNNApi._cookie to return the given value for the session cookie."""
+    return patch(
+        "custom_components.bcnn.bcnn_api.BCNNApi._cookie",
+        return_value=value,
+    )
 
 
 # ----------------------- pure helpers -----------------------
@@ -157,16 +179,15 @@ class TestParseAccountNumber:
 
 class TestSessionIsExpired:
     def test_no_start_session(self) -> None:
-        api = BCNNApi("u", "p")
-        assert api.session_is_expired() is True
+        assert _make_api().session_is_expired() is True
 
     def test_fresh(self) -> None:
-        api = BCNNApi("u", "p")
+        api = _make_api()
         api.start_session = int(datetime.now().timestamp())
         assert api.session_is_expired() is False
 
     def test_stale(self) -> None:
-        api = BCNNApi("u", "p")
+        api = _make_api()
         api.start_session = int(datetime.now().timestamp()) - 2000
         assert api.session_is_expired() is True
 
@@ -175,80 +196,98 @@ class TestSessionIsExpired:
 
 
 class TestAuthenticate:
-    def test_happy_path(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response(_fixture("auth_page.html"))
-        api._session.post.return_value = _response("OK")
-        api._session.cookies = {"Drupal.visitor.autologout_login": "1700000000"}
+    async def test_happy_path(self, authed_api: BCNNApi) -> None:
+        # Force re-auth by invalidating the seeded start_session.
+        authed_api.start_session = None
+        with aioresponses() as mocked, _patch_auth_cookie("1700000000"):
+            _mock_auth(mocked)
+            mocked.post(
+                QUERYDATA_URL,
+                payload={
+                    "code": 0,
+                    "data": {"accountInfo": {"accounts": [1]}},
+                    "errors": [],
+                },
+            )
+            await authed_api.get_accounts()
+        assert authed_api.form_build_id == "form-AUTH123"
+        assert authed_api.start_session == 1700000000
 
-        api.authenticate()
+    async def test_missing_cookie_raises_auth_error(self, authed_api: BCNNApi) -> None:
+        authed_api.start_session = None
+        with aioresponses() as mocked, _patch_auth_cookie(None):
+            _mock_auth(mocked)
 
-        assert api.form_build_id == "form-AUTH123"
-        assert api.start_session == 1700000000
-        api._session.post.assert_called_once()
+            with pytest.raises(BCNNAuthError):
+                await authed_api.get_accounts()
 
-    def test_missing_cookie_raises_auth_error(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response(_fixture("auth_page.html"))
-        api._session.post.return_value = _response("OK")
-        api._session.cookies = {}
+    async def test_no_form_build_id_raises_parse_error(self, authed_api: BCNNApi) -> None:
+        authed_api.start_session = None
+        with aioresponses() as mocked:
+            mocked.get(AUTH_URL, body="<html><body>no form</body></html>")
 
-        with pytest.raises(BCNNAuthError):
-            api.authenticate()
+            with pytest.raises(BCNNParseError, match="form_build_id"):
+                await authed_api.get_accounts()
 
-    def test_no_form_build_id_raises_parse_error(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response("<html><body>no form</body></html>")
+    async def test_network_error_wrapped(self, authed_api: BCNNApi) -> None:
+        authed_api.start_session = None
+        with aioresponses() as mocked:
+            mocked.get(AUTH_URL, exception=aiohttp.ClientConnectionError("boom"))
 
-        with pytest.raises(BCNNParseError, match="form_build_id"):
-            api.authenticate()
-
-    def test_network_error_wrapped(self) -> None:
-        api = _make_api()
-        api._session.get.side_effect = requests.ConnectionError("boom")
-
-        with pytest.raises(BCNNConnectionError):
-            api.authenticate()
+            with pytest.raises(BCNNConnectionError):
+                await authed_api.get_accounts()
 
 
 # ----------------------- readings flow -----------------------
 
 
+@pytest.fixture
+async def authed_api():
+    """API with a fresh session and pre-set start_session, so _ensure_session
+    skips re-auth. Tests below register their own /readings mocks."""
+    api = _make_api()
+    api._session = aiohttp.ClientSession()
+    api.start_session = int(datetime.now().timestamp())
+    yield api
+    await api.close()
+
+
 class TestReadingsFlow:
-    def test_navigate_updates_tokens(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response(_fixture("readings_page.html"))
+    async def test_navigate_updates_tokens(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.get(READINGS_URL, body=_fixture("readings_page.html"))
 
-        api.navigate_to_readings()
+            await authed_api.navigate_to_readings()
 
-        assert api.form_build_id == "form-READ456"
-        assert api.form_token == "token-READ789"
+        assert authed_api.form_build_id == "form-READ456"
+        assert authed_api.form_token == "token-READ789"
 
-    def test_select_account_posts_and_updates_tokens(self) -> None:
-        api = _make_api()
-        api.form_build_id = "stale-build"
-        api.form_token = "stale-token"
-        api._session.post.return_value = _response(_fixture("readings_page.html"))
+    async def test_select_account_posts_and_updates_tokens(self, authed_api: BCNNApi) -> None:
+        authed_api.form_build_id = "stale-build"
+        authed_api.form_token = "stale-token"
+        with aioresponses() as mocked:
+            mocked.post(READINGS_URL, body=_fixture("readings_page.html"))
 
-        api.select_account("123456789")
+            await authed_api.select_account("123456789")
 
-        args, kwargs = api._session.post.call_args
-        assert args[0].endswith("/readings")
-        body = kwargs["data"]
-        assert body["account_number"] == "123456789"
-        assert body["find_account"] == "OK"
-        assert body["form_build_id"] == "stale-build"
-        assert body["form_token"] == "stale-token"
-        # tokens are refreshed from the response
-        assert api.form_build_id == "form-READ456"
-        assert api.form_token == "token-READ789"
+            req = next(iter(mocked.requests.values()))[0]
+            body = dict(req.kwargs["data"])
+            assert body["account_number"] == "123456789"
+            assert body["find_account"] == "OK"
+            assert body["form_build_id"] == "stale-build"
+            assert body["form_token"] == "stale-token"
 
-    def test_get_information_on_water_meters(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response(_fixture("readings_page.html"))
-        api._session.post.return_value = _response(_fixture("readings_page.html"))
+        assert authed_api.form_build_id == "form-READ456"
+        assert authed_api.form_token == "token-READ789"
 
-        meters = api.get_information_on_water_meters("123456789")
+    async def test_get_information_on_water_meters(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.get(READINGS_URL, body=_fixture("readings_page.html"))
+            # POSTed twice — select_account and change_readings_form.
+            mocked.post(READINGS_URL, body=_fixture("readings_page.html"))
+            mocked.post(READINGS_URL, body=_fixture("readings_page.html"))
+
+            meters = await authed_api.get_information_on_water_meters("123456789")
 
         assert len(meters) == 2
         cold = next(m for m in meters if m["device_type"] == "Холодная вода")
@@ -258,32 +297,32 @@ class TestReadingsFlow:
         assert cold["amount_water"] == "5.333"
         assert cold["repr_number"] == "cw_12345678"
 
-        # devices cache is populated with formatter parsed from onchange
-        cached = api.devices["123456789"]
+        cached = authed_api.devices["123456789"]
         assert len(cached) == 2
         cold_device = next(d for d in cached if d.device_number == "12345678")
         assert cold_device.formatter == ("5", "3")
 
-    def test_get_information_clears_devices_between_calls(self) -> None:
-        api = _make_api()
-        api._session.get.return_value = _response(_fixture("readings_page.html"))
-        api._session.post.return_value = _response(_fixture("readings_page.html"))
+    async def test_get_information_clears_devices_between_calls(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.get(READINGS_URL, body=_fixture("readings_page.html"), repeat=True)
+            mocked.post(READINGS_URL, body=_fixture("readings_page.html"), repeat=True)
 
-        api.get_information_on_water_meters("123456789")
-        first = {d.device_number for d in api.devices["123456789"]}
-        api.get_information_on_water_meters("123456789")
-        second = {d.device_number for d in api.devices["123456789"]}
+            await authed_api.get_information_on_water_meters("123456789")
+            first = {d.device_number for d in authed_api.devices["123456789"]}
+            await authed_api.get_information_on_water_meters("123456789")
+            second = {d.device_number for d in authed_api.devices["123456789"]}
 
         assert first == second  # no duplicates from a second call
 
-    def test_enter_readings_logs_success_marker(self, caplog) -> None:
-        api = _make_api()
-        api._session.post.side_effect = [
-            _response(_fixture("readings_page.html")),  # change_readings_form
-            _response(_fixture("readings_submitted.html")),  # enter_readings
-        ]
-        with caplog.at_level("INFO", logger="custom_components.bcnn.bcnn_api"):
-            api.enter_readings("123456789", {"cw_12345678": "00110.456"})
+    async def test_enter_readings_logs_success_marker(self, authed_api: BCNNApi, caplog) -> None:
+        with aioresponses() as mocked:
+            # change_readings_form → readings_page.html, then enter_readings → submitted.html
+            mocked.post(READINGS_URL, body=_fixture("readings_page.html"))
+            mocked.post(READINGS_URL, body=_fixture("readings_submitted.html"))
+
+            with caplog.at_level("INFO", logger="custom_components.bcnn.bcnn_api"):
+                await authed_api.enter_readings("123456789", {"cw_12345678": "00110.456"})
+
         assert any("успешно" in r.message for r in caplog.records)
 
 
@@ -291,72 +330,73 @@ class TestReadingsFlow:
 
 
 class TestGetAccounts:
-    def test_returns_payload(self) -> None:
-        api = _make_api()
-        resp = _response("{}")
-        resp.json.return_value = {
-            "code": 0,
-            "data": {"accountInfo": {"accounts": [123, 456]}},
-            "errors": [],
-        }
-        api._session.post.return_value = resp
+    async def test_returns_payload(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.post(
+                QUERYDATA_URL,
+                payload={
+                    "code": 0,
+                    "data": {"accountInfo": {"accounts": [123, 456]}},
+                    "errors": [],
+                },
+            )
 
-        result = api.get_accounts()
+            result = await authed_api.get_accounts()
+
         assert result["data"]["accountInfo"]["accounts"] == [123, 456]
 
-    def test_errors_in_payload_raise_connection_error(self) -> None:
-        api = _make_api()
-        resp = _response("{}")
-        resp.json.return_value = {"errors": ["something broke"]}
-        api._session.post.return_value = resp
+    async def test_errors_in_payload_raise_connection_error(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.post(QUERYDATA_URL, payload={"errors": ["something broke"]})
 
-        with pytest.raises(BCNNConnectionError):
-            api.get_accounts()
+            with pytest.raises(BCNNConnectionError):
+                await authed_api.get_accounts()
 
-    def test_non_json_response_raises_connection_error(self) -> None:
-        api = _make_api()
-        resp = _response("oops")
-        resp.json.side_effect = ValueError("not json")
-        api._session.post.return_value = resp
+    async def test_non_json_response_raises_connection_error(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.post(QUERYDATA_URL, body="oops", content_type="text/plain")
 
-        with pytest.raises(BCNNConnectionError):
-            api.get_accounts()
+            with pytest.raises(BCNNConnectionError):
+                await authed_api.get_accounts()
 
 
 # ----------------------- charges / current payment -----------------------
 
 
+def _mock_charges(mocked: aioresponses) -> None:
+    """get_charges → get_chart_data POST + /payments GET."""
+    mocked.post(QUERYDATA_URL, payload={"data": {}})
+    mocked.get(PAYMENTS_URL, body=_fixture("payments_page.html"))
+
+
 class TestGetCharges:
-    def _prep_api(self) -> BCNNApi:
-        api = _make_api()
-        # get_chart_data POSTs JSON, get_charges GETs /payments. Mock both.
-        chart_resp = _response("{}")
-        chart_resp.json.return_value = {"data": {}}
-        api._session.post.return_value = chart_resp
-        api._session.get.return_value = _response(_fixture("payments_page.html"))
-        return api
+    async def test_parses_periods_and_services(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            _mock_charges(mocked)
 
-    def test_parses_periods_and_services(self) -> None:
-        api = self._prep_api()
-        charges = api.get_charges("123456789")
+            charges = await authed_api.get_charges("123456789")
 
-        # 3 periods × 1 service each
         assert len(charges) == 3
         periods = [c["period"] for c in charges]
-        assert periods == sorted(periods)  # natural order from the page
+        assert periods == sorted(periods)
         for period in charges:
             assert period["opening_balance"] in {"0.00", "200.00"}
             assert isinstance(period.get("services"), list)
             assert len(period["services"]) == 1
 
-    def test_missing_table_raises_parse_error(self) -> None:
-        api = self._prep_api()
-        api._session.get.return_value = _response("<html><body>пусто</body></html>")
-        with pytest.raises(BCNNParseError):
-            api.get_charges("123456789")
+    async def test_missing_table_raises_parse_error(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            mocked.post(QUERYDATA_URL, payload={"data": {}})
+            mocked.get(PAYMENTS_URL, body="<html><body>пусто</body></html>")
 
-    def test_current_payment_returns_latest_period(self) -> None:
-        api = self._prep_api()
-        current = api.get_current_payment("123456789")
-        assert current["period"].month == 3  # март 2026 в фикстуре — самый поздний
+            with pytest.raises(BCNNParseError):
+                await authed_api.get_charges("123456789")
+
+    async def test_current_payment_returns_latest_period(self, authed_api: BCNNApi) -> None:
+        with aioresponses() as mocked:
+            _mock_charges(mocked)
+
+            current = await authed_api.get_current_payment("123456789")
+
+        assert current["period"].month == 3
         assert current["due_payment"] == "900.00"

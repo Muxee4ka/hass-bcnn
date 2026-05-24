@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from functools import partial
 import logging
 from typing import Any
 
@@ -63,15 +62,9 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for attempt in range(_RETRY_ATTEMPTS):
             try:
                 async with self.lock:
-                    readings = await self.hass.async_add_executor_job(
-                        partial(self._api.get_information_on_water_meters, self.account)
-                    )
-                    info = await self.hass.async_add_executor_job(
-                        partial(self._api.get_address, self.account)
-                    )
-                    payment = await self.hass.async_add_executor_job(
-                        partial(self._api.get_current_payment, self.account)
-                    )
+                    readings = await self._api.get_information_on_water_meters(self.account)
+                    info = await self._api.get_address(self.account)
+                    payment = await self._api.get_current_payment(self.account)
                 break  # успех — выходим из цикла
             except BCNNAuthError as error:
                 self.config_entry.async_start_reauth(self.hass)
@@ -112,9 +105,7 @@ class BCNNCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_send_readings(self, meter_values: tuple[tuple[str, str], ...]) -> str | None:
         _LOGGER.debug("Отправка показаний: %s", meter_values)
-        return await self.hass.async_add_executor_job(
-            partial(self._api.send_meter_readings, self.account, meter_values)
-        )
+        return await self._api.send_meter_readings(self.account, meter_values)
 
     async def async_get_bill(self) -> bytes | None:
-        return await self.hass.async_add_executor_job(partial(self._api.get_bill, self.account))
+        return await self._api.get_bill(self.account)

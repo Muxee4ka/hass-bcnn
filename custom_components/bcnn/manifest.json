@@ -12,8 +12,7 @@
     "requirements": [
         "transliterate>=1.10.2",
         "beautifulsoup4>=4.12.2",
-        "lxml>=4.9.0",
-        "requests>=2.31.0"
+        "lxml>=4.9.0"
     ],
     "version": "0.2.0"
 }

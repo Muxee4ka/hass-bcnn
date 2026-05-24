@@ -48,5 +48,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: BCNNConfigEntry) -> boo
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        coordinator: BCNNCoordinator | None = entry.runtime_data
+        if coordinator is not None:
+            await coordinator._api.close()
         await async_unload_services(hass, entry)
     return unload_ok

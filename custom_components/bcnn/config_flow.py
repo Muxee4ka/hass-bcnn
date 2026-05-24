@@ -1,4 +1,3 @@
-from functools import partial
 import logging
 from typing import Any
 
@@ -23,9 +22,12 @@ class BCNNConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
+            bcnn = BCNNApi(login=user_input[CONF_LOGIN], password=user_input[CONF_PASSWORD])
             try:
-                bcnn = BCNNApi(login=user_input[CONF_LOGIN], password=user_input[CONF_PASSWORD])
-                data = await self.hass.async_add_executor_job(partial(bcnn.get_accounts))
+                try:
+                    data = await bcnn.get_accounts()
+                finally:
+                    await bcnn.close()
                 accounts = data.get("data", {}).get("accountInfo", {}).get("accounts", [])
                 if not accounts:
                     errors["base"] = "no_accounts"
@@ -104,12 +106,15 @@ class BCNNConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             new_password = user_input[CONF_PASSWORD]
+            bcnn = BCNNApi(
+                login=reauth_entry.data[CONF_LOGIN],
+                password=new_password,
+            )
             try:
-                bcnn = BCNNApi(
-                    login=reauth_entry.data[CONF_LOGIN],
-                    password=new_password,
-                )
-                await self.hass.async_add_executor_job(partial(bcnn.get_accounts))
+                try:
+                    await bcnn.get_accounts()
+                finally:
+                    await bcnn.close()
             except BCNNAuthError:
                 errors["base"] = "invalid_auth"
             except BCNNConnectionError:
